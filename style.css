@@ -226,6 +226,17 @@ main {
   color: var(--accent);
 }
 
+.pick-portrait {
+  width: 48px;
+  height: 48px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  padding: 4px;
+}
+
 .stat-alloc-row {
   display: flex;
   gap: 1rem;
@@ -388,6 +399,32 @@ main {
   box-shadow: none;
 }
 
+.hp-bar-track {
+  width: 110px;
+  height: 12px;
+  background: #241f2c;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.hp-bar-fill {
+  height: 100%;
+  background: var(--lose);
+  box-shadow: 0 0 6px rgba(255, 107, 107, 0.5);
+  transition: width 0.25s ease;
+}
+
+.hp-bar-value {
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.65rem;
+  color: var(--text);
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
 .relics-list {
   font-size: 1rem;
   color: var(--text);
@@ -460,18 +497,69 @@ main {
   height: 44px;
 }
 
-@keyframes idle-breathe {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.08); }
+.backdrop-sprite {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter: drop-shadow(0 0 12px rgba(0, 0, 0, 0.6));
+  animation: idle-breathe 3s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
+  transform: scale(2.2);
 }
 
-.mood-amber { background: linear-gradient(160deg, #4a3418, #1c1410); color: #e0a860; }
+.backdrop-sprite--moth {
+  filter: drop-shadow(0 0 12px rgba(0, 0, 0, 0.6)) hue-rotate(220deg) saturate(1.4);
+}
+
+@keyframes idle-breathe {
+  0%, 100% { transform: scale(2.2); }
+  50% { transform: scale(2.35); }
+}
+
+.mood-amber {
+  background-image: linear-gradient(160deg, rgba(74, 52, 24, 0.78), rgba(28, 20, 16, 0.88)), url('assets/bg-corridor.png');
+  background-repeat: no-repeat, repeat;
+  background-size: cover, 64px 64px;
+  image-rendering: pixelated;
+  color: #e0a860;
+}
 .mood-violet { background: linear-gradient(160deg, #3a2a52, #1a1424); color: #b47cff; }
-.mood-green { background: linear-gradient(160deg, #1f3d2e, #10201a); color: #5fbf7a; }
-.mood-orange { background: linear-gradient(160deg, #4a2a12, #1c120a); color: #ff8a4c; }
-.mood-bone { background: linear-gradient(160deg, #3a3630, #181613); color: #e7e2d6; }
-.mood-purple { background: linear-gradient(160deg, #2c1f45, #14101e); color: #9b6dff; }
-.mood-red { background: linear-gradient(160deg, #4a1420, #1c0a0e); color: #ff6b6b; }
+.mood-green {
+  background-image: linear-gradient(160deg, rgba(31, 61, 46, 0.78), rgba(16, 32, 26, 0.88)), url('assets/bg-water-tile.png');
+  background-repeat: no-repeat, repeat;
+  background-size: cover, 128px 128px;
+  image-rendering: pixelated;
+  color: #5fbf7a;
+}
+.mood-orange {
+  background-image: linear-gradient(160deg, rgba(74, 42, 18, 0.72), rgba(28, 18, 10, 0.85)), url('assets/bg-shrine.png');
+  background-repeat: no-repeat, repeat;
+  background-size: cover, 64px 64px;
+  image-rendering: pixelated;
+  color: #ff8a4c;
+}
+.mood-bone {
+  background-image: linear-gradient(160deg, rgba(58, 54, 48, 0.78), rgba(24, 22, 19, 0.88)), url('assets/bg-bones.png');
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, center 92%;
+  background-size: cover, 120px 80px;
+  image-rendering: pixelated;
+  color: #e7e2d6;
+}
+.mood-purple {
+  background-image: linear-gradient(160deg, rgba(44, 31, 69, 0.78), rgba(20, 16, 30, 0.88)), url('assets/bg-wardstone.png');
+  background-repeat: no-repeat, repeat;
+  background-size: cover, 64px 64px;
+  image-rendering: pixelated;
+  color: #9b6dff;
+}
+.mood-red {
+  background-image: linear-gradient(160deg, rgba(74, 20, 32, 0.72), rgba(28, 10, 14, 0.85)), url('assets/bg-wardstone.png');
+  background-repeat: no-repeat, repeat;
+  background-size: cover, 64px 64px;
+  image-rendering: pixelated;
+  color: #ff6b6b;
+}
 
 .story-text {
   padding: 1.3rem 1.5rem 0.4rem;
@@ -522,6 +610,16 @@ main {
   opacity: 0.4;
   cursor: not-allowed;
   font-style: italic;
+}
+
+.choice-class {
+  border-color: var(--border-bright);
+  background: rgba(224, 194, 106, 0.08);
+}
+
+.choice-class:hover:not(:disabled) {
+  border-color: var(--neutral);
+  background: rgba(224, 194, 106, 0.16);
 }
 
 /* ---- Dice roll ---- */
@@ -596,6 +694,68 @@ footer {
 .overlay[hidden] {
   display: none;
 }
+
+/* ---- Loading screen ---- */
+
+#loading-screen {
+  background: var(--bg);
+  z-index: 10;
+}
+
+.loading-box {
+  text-align: center;
+}
+
+.loading-torch {
+  width: 56px;
+  height: 56px;
+  color: #ff8a4c;
+  filter: drop-shadow(0 0 16px rgba(255, 138, 76, 0.6));
+  animation: loading-flicker 1.1s ease-in-out infinite;
+}
+
+@keyframes loading-flicker {
+  0%, 100% { opacity: 0.75; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.loading-text {
+  font-family: "Press Start 2P", monospace;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin: 1.2rem 0 1rem;
+  letter-spacing: 0.05em;
+}
+
+.loading-bar {
+  width: 220px;
+  height: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 0 auto;
+}
+
+.loading-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+/* ---- End screen icon ---- */
+
+.end-icon {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 0.6rem;
+  color: var(--accent);
+}
+
+.overlay-card--win .end-icon { color: var(--win); filter: drop-shadow(0 0 10px rgba(127, 224, 160, 0.5)); }
+.overlay-card--lose .end-icon { color: var(--lose); filter: drop-shadow(0 0 10px rgba(255, 107, 107, 0.5)); }
+.overlay-card--neutral .end-icon { color: var(--neutral); filter: drop-shadow(0 0 10px rgba(224, 194, 106, 0.5)); }
 
 .overlay-card {
   background: var(--panel);
