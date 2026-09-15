@@ -2425,7 +2425,7 @@ function resolveChoice(choice) {
     showRollResult(result, branch);
     return;
   }
-  choice.effect();
+  if (choice.effect) choice.effect();
   advanceTo(choice.next);
 }
 
