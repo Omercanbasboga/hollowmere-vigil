@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=5">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 
@@ -20,6 +20,9 @@
 </div>
 
 <div class="fog"></div>
+<div class="mood-glow" id="mood-glow"></div>
+<div class="low-hp-vignette" id="low-hp-vignette"></div>
+<div class="damage-flash" id="damage-flash"></div>
 <div class="ember"></div>
 <div class="ember"></div>
 <div class="ember"></div>
@@ -96,6 +99,20 @@
       <path d="M12 2 C10 5 9 7 9 9 A3 3 0 0 0 15 9 C15 7 14 5 12 2 Z" fill="currentColor" opacity="0.85"/>
       <path d="M11 11 L13 11 L13.5 21 L10.5 21 Z" fill="none" stroke="currentColor" stroke-width="1.2"/>
     </symbol>
+    <symbol id="icon-gear" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M12 2 L12 5 M12 19 L12 22 M2 12 L5 12 M19 12 L22 12
+               M4.9 4.9 L7 7 M17 17 L19.1 19.1 M19.1 4.9 L17 7 M7 17 L4.9 19.1"
+            fill="none" stroke="currentColor" stroke-width="1.5"/>
+    </symbol>
+    <symbol id="icon-book" viewBox="0 0 24 24">
+      <path d="M4 4 C4 3 5 3 6 3.5 C8 4.3 10 4.3 12 3.5 C14 4.3 16 4.3 18 3.5 C19 3 20 3 20 4 L20 19 C20 20 19 20 18 19.5 C16 18.7 14 18.7 12 19.5 C10 18.7 8 18.7 6 19.5 C5 20 4 20 4 19 Z M12 3.5 L12 19.5"
+            fill="none" stroke="currentColor" stroke-width="1.3"/>
+    </symbol>
+    <symbol id="icon-badge" viewBox="0 0 24 24">
+      <path d="M12 2 L14.5 8.5 L21 9 L16 13.5 L17.5 20 L12 16.5 L6.5 20 L8 13.5 L3 9 L9.5 8.5 Z"
+            fill="currentColor"/>
+    </symbol>
   </defs>
 </svg>
 
@@ -103,17 +120,112 @@
   <div class="header-top">
     <h1>Hollowmere: The Vigil</h1>
     <button id="lang-toggle" type="button">TR</button>
+    <button id="settings-toggle" type="button" class="icon-btn" aria-label="Settings">
+      <svg><use href="#icon-gear"></use></svg>
+    </button>
   </div>
   <p class="tagline" data-en="A branching watch through the ruins beneath Hollowmere." data-tr="Hollowmere'in altındaki harabelerde dallanan bir nöbet.">A branching watch through the ruins beneath Hollowmere.</p>
   <button id="sound-toggle" type="button">&#128264; <span data-en="Sound off" data-tr="Ses kapalı">Sound off</span></button>
 </header>
 
 <main>
+  <div class="overlay" id="main-menu-overlay" hidden>
+    <div class="overlay-card overlay-card--intro">
+      <h2>Hollowmere: The Vigil</h2>
+      <p class="intro-lore" data-en="A branching watch through the ruins beneath Hollowmere. Build a Warden, pick a difficulty, and see how deep you get." data-tr="Hollowmere'in altındaki harabelerde dallanan bir nöbet. Bir Muhafız oluştur, bir zorluk seç, ne kadar derine inebildiğine bak.">A branching watch through the ruins beneath Hollowmere. Build a Warden, pick a difficulty, and see how deep you get.</p>
+      <div class="menu-btn-col">
+        <button id="menu-new-button" class="primary-btn" data-en="Begin the Vigil" data-tr="Nöbete Başla">Begin the Vigil</button>
+        <button id="menu-continue-button" class="primary-btn primary-btn--ghost" disabled data-en="Continue" data-tr="Devam Et">Continue</button>
+        <button id="menu-settings-button" class="primary-btn primary-btn--ghost" data-en="Settings" data-tr="Ayarlar">Settings</button>
+      </div>
+    </div>
+  </div>
+
   <div class="overlay" id="intro-overlay" hidden>
     <div class="overlay-card overlay-card--intro">
       <h2 data-en="Build your Warden" data-tr="Muhafızını Oluştur">Build your Warden</h2>
       <div id="creation-root"></div>
       <button id="begin-button" class="primary-btn" disabled data-en="Begin the Vigil" data-tr="Nöbete Başla">Begin the Vigil</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="settings-overlay" hidden>
+    <div class="overlay-card overlay-card--intro">
+      <h2 data-en="Settings" data-tr="Ayarlar">Settings</h2>
+
+      <div class="settings-row">
+        <span class="settings-label" data-en="Language" data-tr="Dil">Language</span>
+        <div class="settings-lang-btns">
+          <button id="settings-lang-en" type="button" class="lang-pick-btn">EN</button>
+          <button id="settings-lang-tr" type="button" class="lang-pick-btn">TR</button>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-label" data-en="Music volume" data-tr="Müzik sesi">Music volume</span>
+        <input type="range" id="music-volume-slider" min="0" max="100" value="70">
+      </div>
+
+      <div class="settings-row">
+        <span class="settings-label" data-en="Button sound volume" data-tr="Tuş sesi seviyesi">Button sound volume</span>
+        <input type="range" id="sfx-volume-slider" min="0" max="100" value="70">
+      </div>
+
+      <button id="settings-credits-button" class="primary-btn primary-btn--ghost" data-en="Credits" data-tr="Emeği Geçenler">Credits</button>
+      <button id="settings-back-button" class="primary-btn" data-en="Back" data-tr="Geri">Back</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="credits-overlay" hidden>
+    <div class="overlay-card overlay-card--intro">
+      <h2 data-en="Credits" data-tr="Emeği Geçenler">Credits</h2>
+      <div id="credits-list" class="credits-list">
+        <div class="credits-entry">
+          <strong data-en="Music" data-tr="Müzik">Music</strong>
+          <span data-en="&quot;Spooky Dungeon&quot; by Memoraphile and &quot;Loopable Dungeon Ambience&quot; by JaggedStone, both CC0, from OpenGameArt.org." data-tr="Memoraphile'ın &quot;Spooky Dungeon&quot; ve JaggedStone'un &quot;Loopable Dungeon Ambience&quot; parçaları, ikisi de CC0, OpenGameArt.org'dan.">"Spooky Dungeon" by Memoraphile and "Loopable Dungeon Ambience" by JaggedStone, both CC0, from OpenGameArt.org.</span>
+        </div>
+        <div class="credits-entry">
+          <strong data-en="Sound effects" data-tr="Ses efektleri">Sound effects</strong>
+          <span data-en="Win, lose, and button jingles from the 8-Bit Sound Library by Little Robot Sound Factory (littlerobotsoundfactory.com), CC-BY 3.0, from OpenGameArt.org." data-tr="Kazanma, kaybetme ve tuş sesleri Little Robot Sound Factory'nin (littlerobotsoundfactory.com) 8-Bit Sound Library'sinden, CC-BY 3.0, OpenGameArt.org'dan.">Win, lose, and button jingles from the 8-Bit Sound Library by Little Robot Sound Factory (littlerobotsoundfactory.com), CC-BY 3.0, from OpenGameArt.org.</span>
+        </div>
+        <div class="credits-entry">
+          <strong data-en="Pixel art, Kenney.nl" data-tr="Piksel sanat, Kenney.nl">Pixel art, Kenney.nl</strong>
+          <span data-en="Class portraits, Tiny Dungeon pack, CC0." data-tr="Sınıf portreleri, Tiny Dungeon paketi, CC0.">Class portraits, Tiny Dungeon pack, CC0.</span>
+        </div>
+        <div class="credits-entry">
+          <strong data-en="Pixel art, freegamesprites" data-tr="Piksel sanat, freegamesprites">Pixel art, freegamesprites</strong>
+          <span data-en="Bonewretch sprite and dungeon backdrop tiles, Dungeon Pack, CC0, itch.io." data-tr="Bonewretch sprite'ı ve zindan arka plan dokuları, Dungeon Pack, CC0, itch.io.">Bonewretch sprite and dungeon backdrop tiles, Dungeon Pack, CC0, itch.io.</span>
+        </div>
+        <div class="credits-entry">
+          <strong data-en="Pixel art, madameberry" data-tr="Piksel sanat, madameberry">Pixel art, madameberry</strong>
+          <span data-en="Grave Moth sprite, CC0, OpenGameArt.org." data-tr="Mezar Güvesi sprite'ı, CC0, OpenGameArt.org.">Grave Moth sprite, CC0, OpenGameArt.org.</span>
+        </div>
+        <div class="credits-entry">
+          <strong data-en="Pixel art, takeshi" data-tr="Piksel sanat, takeshi">Pixel art, takeshi</strong>
+          <span data-en="Ashling sprite, CC0, OpenGameArt.org." data-tr="Ashling sprite'ı, CC0, OpenGameArt.org.">Ashling sprite, CC0, OpenGameArt.org.</span>
+        </div>
+        <div class="credits-entry">
+          <strong data-en="Pixel art, Blooming Pixels" data-tr="Piksel sanat, Blooming Pixels">Pixel art, Blooming Pixels</strong>
+          <span data-en="Fen Serpent sprite, CC0, OpenGameArt.org." data-tr="Bataklık Yılanı sprite'ı, CC0, OpenGameArt.org.">Fen Serpent sprite, CC0, OpenGameArt.org.</span>
+        </div>
+        <div class="credits-entry">
+          <strong data-en="Pixel art, One Man Army" data-tr="Piksel sanat, One Man Army">Pixel art, One Man Army</strong>
+          <span data-en="Drowspawn sprite, CC0, OpenGameArt.org." data-tr="Drowspawn sprite'ı, CC0, OpenGameArt.org.">Drowspawn sprite, CC0, OpenGameArt.org.</span>
+        </div>
+        <div class="credits-entry">
+          <strong data-en="Fonts" data-tr="Fontlar">Fonts</strong>
+          <span data-en="Press Start 2P and VT323, Google Fonts, both open source (SIL Open Font License)." data-tr="Press Start 2P ve VT323, Google Fonts, ikisi de açık kaynak (SIL Open Font License).">Press Start 2P and VT323, Google Fonts, both open source (SIL Open Font License).</span>
+        </div>
+      </div>
+      <button id="credits-back-button" class="primary-btn" data-en="Back" data-tr="Geri">Back</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="history-overlay" hidden>
+    <div class="overlay-card overlay-card--intro">
+      <h2 data-en="Your Path So Far" data-tr="Buraya Kadarki Yolun">Your Path So Far</h2>
+      <div id="history-list" class="history-list"></div>
+      <button id="history-back-button" class="primary-btn" data-en="Back" data-tr="Geri">Back</button>
     </div>
   </div>
 
@@ -123,6 +235,9 @@
         <span id="sheet-name" class="sheet-name"></span>
         <span id="sheet-class" class="sheet-tag"></span>
         <span id="sheet-difficulty" class="sheet-tag"></span>
+        <button id="history-toggle" type="button" class="icon-btn icon-btn--small" aria-label="History">
+          <svg><use href="#icon-book"></use></svg>
+        </button>
       </div>
       <div class="stat-row">
         <div class="stat-block">
@@ -154,6 +269,7 @@
         <h2 id="scene-title"></h2>
         <p id="scene-text"></p>
       </div>
+      <p class="first-check-hint" id="first-check-hint" hidden data-en="A check rolls a d20, adds the stat shown, and compares it to the target number. Clear it and the choice succeeds." data-tr="Bir kontrol d20 atar, gösterilen stat'ı ekler ve hedef sayıyla karşılaştırır. Geçersen seçim başarılı olur.">A check rolls a d20, adds the stat shown, and compares it to the target number. Clear it and the choice succeeds.</p>
       <div class="choices" id="choices"></div>
     </section>
   </div>
@@ -164,7 +280,9 @@
       <h2 id="end-title"></h2>
       <p id="end-text"></p>
       <p class="end-summary" id="end-summary"></p>
+      <div class="badges-row" id="badges-row"></div>
       <button id="retry-button" class="primary-btn" data-en="Walk it again" data-tr="Tekrar dene">Walk it again</button>
+      <button id="end-menu-button" class="primary-btn primary-btn--ghost" data-en="Main menu" data-tr="Ana menü">Main menu</button>
     </div>
   </div>
 </main>
@@ -173,6 +291,6 @@
   <p data-en="Music: &quot;Spooky Dungeon&quot; by Memoraphile and &quot;Loopable Dungeon Ambience&quot; by JaggedStone, both CC0. Win/lose jingles from the 8-Bit Sound Library by Little Robot Sound Factory (littlerobotsoundfactory.com), CC-BY 3.0. All from OpenGameArt.org." data-tr="Müzik: Memoraphile'ın &quot;Spooky Dungeon&quot; ve JaggedStone'un &quot;Loopable Dungeon Ambience&quot; parçaları, ikisi de CC0. Kazanma/kaybetme müzikleri Little Robot Sound Factory'nin (littlerobotsoundfactory.com) 8-Bit Sound Library'sinden, CC-BY 3.0. Hepsi OpenGameArt.org'dan.">Music: "Spooky Dungeon" by Memoraphile and "Loopable Dungeon Ambience" by JaggedStone, both CC0. Win/lose jingles from the 8-Bit Sound Library by Little Robot Sound Factory (littlerobotsoundfactory.com), CC-BY 3.0. All from OpenGameArt.org.</p>
 </footer>
 
-<script src="script.js?v=6"></script>
+<script src="script.js?v=7"></script>
 </body>
 </html>

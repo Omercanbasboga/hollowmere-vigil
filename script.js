@@ -100,7 +100,22 @@ const state = {
   dead: false,
   pendingCheck: null,
   lastRoll: null,
+  musicVolume: 0.7,
+  sfxVolume: 0.7,
+  history: [],
+  tookNoDamage: true,
+  usedClassAbility: false,
+  maxRelicsHeld: 0,
+  firstCheckSeen: false,
 };
+
+const BADGES = [
+  { id: "untouched", en: "Untouched", tr: "El Sürülmedi", check: () => state.tookNoDamage },
+  { id: "true_to_class", en: "True to Class", tr: "Sınıfına Sadık", check: () => state.usedClassAbility },
+  { id: "scavenger", en: "Scavenger", tr: "Yağmacı", check: () => state.maxRelicsHeld >= 2 },
+  { id: "sealed_by_words", en: "Sealed by Words", tr: "Sözlerle Mühürlendi", check: () => state.flags.has("resealed") },
+  { id: "survivor", en: "Survivor", tr: "Hayatta Kalan", check: () => !state.dead },
+];
 
 function t(pair) {
   return pair[state.lang];
@@ -115,11 +130,32 @@ function hasAnyFlag(...names) {
 }
 
 function damage(n) {
+  const before = state.hp;
   state.hp = Math.max(0, state.hp - n);
+  if (state.hp < before) {
+    state.tookNoDamage = false;
+    triggerDamageFeedback();
+  }
 }
 
 function heal(n) {
   state.hp = Math.min(state.maxHp, state.hp + n);
+}
+
+function triggerDamageFeedback() {
+  const flash = document.getElementById("damage-flash");
+  if (flash) {
+    flash.classList.remove("damage-flash--play");
+    void flash.offsetWidth;
+    flash.classList.add("damage-flash--play");
+  }
+  const panel = document.querySelector(".story-panel");
+  if (panel) {
+    panel.classList.remove("shake");
+    void panel.offsetWidth;
+    panel.classList.add("shake");
+  }
+  playSfx("hit");
 }
 
 function difficultyMod() {
@@ -2174,7 +2210,7 @@ const SCENES = {
     icon: "icon-moth",
     text: {
       en: "A crack in the ceiling, and out of it: Grave Moths, dozens of them, papery wings catching your torchlight. They aren't fast. They aren't smart. There are a lot of them.",
-      tr: "Tavanda bir çatlak, ve içinden: Mezar Güveleri, düzinelercesi, kağıt gibi kanatları meşale ışığını yansıtıyor. Hızlı değiller. Akıllı değiller. Ama çok sayıdalar.",
+      tr: "Tavanda bir çatlak var, içinden Mezar Güveleri çıkıyor: düzinelercesi, kağıt gibi kanatları meşale ışığını yansıtıyor. Hızlı değiller. Akıllı değiller. Ama çok sayıdalar.",
     },
     choices: [
       {
@@ -2195,7 +2231,7 @@ const SCENES = {
           effect: () => damage(2),
           text: {
             en: "You get half the words right, which is worse than none. They swarm you before scattering on their own.",
-            tr: "Sözlerin yarısını doğru söylüyorsun, ki bu hiç söylememekten kötü. Kendiliklerinden dağılmadan önce seni sarıyorlar.",
+            tr: "Sözlerin yarısını doğru söylüyorsun, bu da hiç söylememekten kötü. Kendiliklerinden dağılmadan önce seni sarıyorlar.",
           },
         },
       },
@@ -2251,7 +2287,7 @@ const SCENES = {
           effect: () => heal(1),
           text: {
             en: "You make out a few words, old ones, and something about hearing them said right steadies you.",
-            tr: "Birkaç kelime seçebiliyorsun, eski kelimeler, ve doğru söylendiğini duymak seni sakinleştiriyor.",
+            tr: "Birkaç kelime seçebiliyorsun, eski kelimeler, doğru söylendiğini duymak da seni sakinleştiriyor.",
           },
         },
         onFail: {
@@ -2376,7 +2412,7 @@ const ENDINGS = {
     title: { en: "A Warden's Strike", tr: "Bir Muhafızın Darbesi" },
     text: {
       en: "You hit it before it finishes turning toward you, and that's the whole fight. The Drowspawn unravels off the ward-stone and doesn't get back up. The stone is still cracked. At least it's not being fed on anymore.",
-      tr: "Sana dönmeyi bitirmeden vuruyorsun, ve dövüş bu kadar. Drowspawn mühür taşından çözülüyor ve bir daha kalkmıyor. Taş hâlâ çatlak. En azından artık beslenmiyor.",
+      tr: "Sana dönmeyi bitirmeden vuruyorsun, dövüş bu kadar. Drowspawn mühür taşından çözülüyor ve bir daha kalkmıyor. Taş hâlâ çatlak. En azından artık beslenmiyor.",
     },
   },
   ending_fight_lose: {
@@ -2384,7 +2420,7 @@ const ENDINGS = {
     title: { en: "Blood on the Stone", tr: "Taşın Üzerindeki Kan" },
     text: {
       en: "It's faster than it looks. You trade blows you can't really afford to trade, and by the time it finally lets go of the ward-stone to deal with you properly, you're both done fighting for tonight. You make it out. Barely counts as a win.",
-      tr: "Göründüğünden hızlı. Karşılayamayacağın darbeler alıp veriyorsun, ve seninle gerçekten ilgilenmek için mühür taşını sonunda bıraktığında ikiniz de bu gece için dövüşü bırakmış oluyorsunuz. Dışarı çıkmayı başarıyorsun. Zar zor kazanç sayılır.",
+      tr: "Göründüğünden hızlı. Karşılayamayacağın darbeler alıp veriyorsun, seninle gerçekten ilgilenmek için mühür taşını sonunda bıraktığında ikiniz de bu gece için dövüşü bırakmış oluyorsunuz. Dışarı çıkmayı başarıyorsun. Zar zor kazanç sayılır.",
     },
   },
   ending_seal_fail: {
@@ -2392,7 +2428,7 @@ const ENDINGS = {
     title: { en: "A Patch, Not a Cure", tr: "Yama, Çare Değil" },
     text: {
       en: "You get the shape of the rite right and the timing wrong. The stone holds, barely, in a way that's going to need someone back down here within the month. It costs you more than you wanted to give.",
-      tr: "Ayinin şeklini doğru buluyorsun ama zamanlamayı yanlış yapıyorsun. Taş tutuyor, zar zor, ve bir ay içinde birinin buraya geri dönmesi gerekecek şekilde. Vermek istediğinden daha fazlasına mal oluyor.",
+      tr: "Ayinin şeklini doğru buluyorsun ama zamanlamayı yanlış yapıyorsun. Taş tutuyor, zar zor, bir ay içinde birinin buraya geri dönmesi gerekecek şekilde. Vermek istediğinden daha fazlasına mal oluyor.",
     },
   },
   ending_warning: {
@@ -2400,7 +2436,7 @@ const ENDINGS = {
     title: { en: "The Warning", tr: "Uyarı" },
     text: {
       en: "You don't stay to fight it. You make it back up and tell the other Wardens exactly what's down there, which is more than the last report managed. Someone braver, or more prepared, will have to finish this.",
-      tr: "Onunla dövüşmek için kalmıyorsun. Yukarı çıkıp diğer Muhafızlara orada tam olarak ne olduğunu anlatıyorsun, ki bu son raporun başardığından fazlası. Daha cesur ya da daha hazırlıklı biri bunu bitirmek zorunda kalacak.",
+      tr: "Onunla dövüşmek için kalmıyorsun. Yukarı çıkıp diğer Muhafızlara orada tam olarak ne olduğunu anlatıyorsun, bu da son raporun başardığından fazlası. Daha cesur ya da daha hazırlıklı biri bunu bitirmek zorunda kalacak.",
     },
   },
   ending_death: {
@@ -2408,7 +2444,7 @@ const ENDINGS = {
     title: { en: "The Vigil Ends Here", tr: "Nöbet Burada Bitiyor" },
     text: {
       en: "The dark takes what it wants sometimes. Your torch goes out before you can get back to the surface, and Hollowmere keeps one more thing it shouldn't.",
-      tr: "Karanlık bazen istediğini alır. Yüzeye çıkamadan meşalen sönüyor, ve Hollowmere alması gerekmeyen bir şeyi daha elinde tutuyor.",
+      tr: "Karanlık bazen istediğini alır. Yüzeye çıkamadan meşalen sönüyor, Hollowmere de alması gerekmeyen bir şeyi daha elinde tutuyor.",
     },
   },
 };
@@ -2418,15 +2454,23 @@ function currentScene() {
 }
 
 function resolveChoice(choice) {
+  if (choice.classOnly) state.usedClassAbility = true;
   if (choice.type === "check") {
     const result = rollCheck(choice.stat, choice.dc);
     state.lastRoll = result;
     const branch = result.success ? choice.onSuccess : choice.onFail;
-    showRollResult(result, branch);
+    showRollResult(result, branch, choice);
     return;
   }
   if (choice.effect) choice.effect();
   advanceTo(choice.next);
+}
+
+function recordHistory() {
+  const scene = currentScene();
+  if (!scene) return;
+  state.history.push({ en: scene.title.en, tr: scene.title.tr });
+  if (state.history.length > 80) state.history.shift();
 }
 
 function advanceTo(nextId) {
@@ -2441,11 +2485,13 @@ function advanceTo(nextId) {
   }
   state.sceneId = nextId;
   state.pendingCheck = null;
+  recordHistory();
   renderScene();
+  saveGame();
 }
 
-function showRollResult(result, branch) {
-  state.pendingCheck = { result, branch };
+function showRollResult(result, branch, choice) {
+  state.pendingCheck = { result, branch, choice };
   renderScene();
 }
 
@@ -2464,6 +2510,19 @@ function confirmRoll() {
     return;
   }
   state.sceneId = next;
+  recordHistory();
+  renderScene();
+  saveGame();
+}
+
+function rerollWithRelic() {
+  if (!state.pendingCheck || state.relics.length === 0) return;
+  const spent = state.relics.pop();
+  const { choice } = state.pendingCheck;
+  const result = rollCheck(choice.stat, choice.dc);
+  state.lastRoll = result;
+  const branch = result.success ? choice.onSuccess : choice.onFail;
+  state.pendingCheck = { result, branch, choice, rerolledWith: spent };
   renderScene();
 }
 
@@ -2488,6 +2547,17 @@ function endRun(endingId) {
   const noneLabel = state.lang === "tr" ? "yok" : "none";
   document.getElementById("end-summary").textContent =
     `${summaryLabel}: ${state.hp}/${state.maxHp}. ${relicsLabel}: ${state.relics.length ? state.relics.join(", ") : noneLabel}`;
+
+  const badgesRow = document.getElementById("badges-row");
+  badgesRow.innerHTML = "";
+  BADGES.filter((b) => b.check()).forEach((b) => {
+    const chip = document.createElement("div");
+    chip.className = "badge-chip";
+    chip.innerHTML = `<svg><use href="#icon-badge"></use></svg><span>${state.lang === "tr" ? b.tr : b.en}</span>`;
+    badgesRow.appendChild(chip);
+  });
+
+  clearSave();
   document.getElementById("end-overlay").hidden = false;
 }
 
@@ -2506,7 +2576,10 @@ function renderCreation() {
     const card = document.createElement("button");
     card.type = "button";
     card.className = "pick-card" + (state.difficultyId === d.id ? " picked" : "");
-    card.innerHTML = `<strong>${t(d.name)}</strong><span>${t(d.desc)}</span>`;
+    const recTag = d.id === "easy"
+      ? `<span class="recommended-tag">${state.lang === "tr" ? "ÖNERİLEN" : "RECOMMENDED"}</span>`
+      : "";
+    card.innerHTML = `${recTag}<strong>${t(d.name)}</strong><span>${t(d.desc)}</span>`;
     card.addEventListener("click", () => {
       state.difficultyId = d.id;
       renderCreation();
@@ -2630,6 +2703,13 @@ function renderSheet() {
   const relicsEl = document.getElementById("relics-list");
   const noneLabel = state.lang === "tr" ? "yok" : "none yet";
   relicsEl.textContent = state.relics.length ? state.relics.join(", ") : noneLabel;
+
+  state.maxRelicsHeld = Math.max(state.maxRelicsHeld, state.relics.length);
+
+  const vignette = document.getElementById("low-hp-vignette");
+  if (vignette) {
+    vignette.classList.toggle("low-hp-vignette--on", state.hp > 0 && state.hp / state.maxHp <= 0.25);
+  }
 }
 
 function renderScene() {
@@ -2641,6 +2721,15 @@ function renderScene() {
 
   const backdrop = document.getElementById("backdrop");
   backdrop.className = "backdrop mood-" + scene.mood;
+  backdrop.classList.remove("backdrop-fade");
+  void backdrop.offsetWidth;
+  backdrop.classList.add("backdrop-fade");
+
+  const glow = document.getElementById("mood-glow");
+  if (glow) {
+    glow.className = "mood-glow mood-glow--on mood-glow--" + scene.mood;
+  }
+
   const sprite = scene.icon && CREATURE_SPRITES[scene.icon];
   if (sprite) {
     const spriteClass = scene.icon === "icon-moth" ? "backdrop-sprite backdrop-sprite--moth" : "backdrop-sprite";
@@ -2657,6 +2746,16 @@ function renderScene() {
 
   const choicesEl = document.getElementById("choices");
   choicesEl.innerHTML = "";
+
+  const hint = document.getElementById("first-check-hint");
+  if (hint) {
+    if (state.pendingCheck && !state.firstCheckSeen) {
+      hint.hidden = false;
+      state.firstCheckSeen = true;
+    } else {
+      hint.hidden = true;
+    }
+  }
 
   if (state.pendingCheck) {
     renderRollResult(choicesEl);
@@ -2717,6 +2816,18 @@ function renderRollResult(choicesEl) {
     choicesEl.appendChild(p);
   }
 
+  if (!result.success && state.relics.length > 0) {
+    const rerollBtn = document.createElement("button");
+    rerollBtn.className = "choice-btn choice-class";
+    const relicName = state.relics[state.relics.length - 1];
+    rerollBtn.textContent =
+      state.lang === "tr"
+        ? `"${relicName}" eşyanı harcayıp yeniden dene`
+        : `Spend "${relicName}" to try again`;
+    rerollBtn.addEventListener("click", rerollWithRelic);
+    choicesEl.appendChild(rerollBtn);
+  }
+
   const continueBtn = document.createElement("button");
   continueBtn.className = "choice-btn";
   continueBtn.textContent = state.lang === "tr" ? "Devam et" : "Continue";
@@ -2732,19 +2843,34 @@ function applyStaticLang() {
     el.textContent = el.dataset[state.lang];
   });
   document.getElementById("lang-toggle").textContent = state.lang === "en" ? "TR" : "EN";
+  document.getElementById("settings-lang-en").classList.toggle("active", state.lang === "en");
+  document.getElementById("settings-lang-tr").classList.toggle("active", state.lang === "tr");
 }
 
-document.getElementById("lang-toggle").addEventListener("click", () => {
-  state.lang = state.lang === "en" ? "tr" : "en";
+function setLang(lang) {
+  state.lang = lang;
   applyStaticLang();
+  saveSettings();
   if (document.getElementById("intro-overlay").hidden === false) {
     renderCreation();
   } else if (!document.getElementById("game-area").hidden) {
     renderScene();
+  } else if (!document.getElementById("main-menu-overlay").hidden) {
+    // static text already re-applied above
   }
+}
+
+document.getElementById("lang-toggle").addEventListener("click", () => {
+  setLang(state.lang === "en" ? "tr" : "en");
 });
 
+document.getElementById("settings-lang-en").addEventListener("click", () => setLang("en"));
+document.getElementById("settings-lang-tr").addEventListener("click", () => setLang("tr"));
+
 // ---- Audio (created lazily so a failed load never blocks the toggle) ----
+
+const BASE_THEME_VOL = 0.25;
+const BASE_AMBIENCE_VOL = 0.3;
 
 let themeAudio = null;
 let ambienceAudio = null;
@@ -2754,7 +2880,7 @@ function ensureAudio() {
   if (!themeAudio) {
     themeAudio = new Audio("audio/theme.mp3");
     themeAudio.loop = true;
-    themeAudio.volume = 0.25;
+    themeAudio.volume = BASE_THEME_VOL * state.musicVolume;
     themeAudio.addEventListener("error", () => {
       document.getElementById("sound-toggle").textContent = "\u{1F507} " + (state.lang === "tr" ? "Müzik yok" : "No audio");
     });
@@ -2762,9 +2888,14 @@ function ensureAudio() {
   if (!ambienceAudio) {
     ambienceAudio = new Audio("audio/ambience.ogg");
     ambienceAudio.loop = true;
-    ambienceAudio.volume = 0.3;
+    ambienceAudio.volume = BASE_AMBIENCE_VOL * state.musicVolume;
     ambienceAudio.addEventListener("error", () => {});
   }
+}
+
+function applyMusicVolume() {
+  if (themeAudio) themeAudio.volume = BASE_THEME_VOL * state.musicVolume;
+  if (ambienceAudio) ambienceAudio.volume = BASE_AMBIENCE_VOL * state.musicVolume;
 }
 
 let winAudio = null;
@@ -2776,7 +2907,7 @@ function playEndingJingle(variant) {
 
   const src = variant === "win" ? "audio/win.mp3" : "audio/lose.mp3";
   const jingle = new Audio(src);
-  jingle.volume = 0.45;
+  jingle.volume = 0.6 * state.sfxVolume;
   jingle.play().catch(() => {});
   if (variant === "win") {
     winAudio = jingle;
@@ -2784,6 +2915,29 @@ function playEndingJingle(variant) {
     loseAudio = jingle;
   }
 }
+
+const sfxCache = {};
+
+function playSfx(name) {
+  if (state.sfxVolume <= 0) return;
+  const files = { click: "audio/click.mp3", select: "audio/select.mp3", hit: "audio/hit.mp3" };
+  const src = files[name];
+  if (!src) return;
+  if (!sfxCache[name]) sfxCache[name] = new Audio(src);
+  const sfx = sfxCache[name];
+  sfx.currentTime = 0;
+  sfx.volume = state.sfxVolume;
+  sfx.play().catch(() => {});
+}
+
+document.addEventListener(
+  "click",
+  (e) => {
+    const target = e.target.closest("button, .pick-card");
+    if (target && !target.disabled) playSfx("click");
+  },
+  true
+);
 
 document.getElementById("sound-toggle").addEventListener("click", () => {
   ensureAudio();
@@ -2800,10 +2954,105 @@ document.getElementById("sound-toggle").addEventListener("click", () => {
   }
 });
 
+document.getElementById("music-volume-slider").addEventListener("input", (e) => {
+  state.musicVolume = Number(e.target.value) / 100;
+  applyMusicVolume();
+  saveSettings();
+});
+
+document.getElementById("sfx-volume-slider").addEventListener("input", (e) => {
+  state.sfxVolume = Number(e.target.value) / 100;
+  saveSettings();
+});
+
+// ---- Save / resume ----
+
+const SAVE_KEY = "hollowmere-vigil-save";
+const SETTINGS_KEY = "hollowmere-vigil-settings";
+
+function saveGame() {
+  try {
+    localStorage.setItem(
+      SAVE_KEY,
+      JSON.stringify({
+        name: state.name,
+        classId: state.classId,
+        difficultyId: state.difficultyId,
+        stats: state.stats,
+        hp: state.hp,
+        maxHp: state.maxHp,
+        relics: state.relics,
+        flags: Array.from(state.flags),
+        sceneId: state.sceneId,
+        tookNoDamage: state.tookNoDamage,
+        usedClassAbility: state.usedClassAbility,
+        maxRelicsHeld: state.maxRelicsHeld,
+        history: state.history,
+      })
+    );
+  } catch (e) {}
+}
+
+function loadGame() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearSave() {
+  try {
+    localStorage.removeItem(SAVE_KEY);
+  } catch (e) {}
+}
+
+function hasSave() {
+  return !!loadGame();
+}
+
+function applySavedState(saved) {
+  state.name = saved.name;
+  state.classId = saved.classId;
+  state.difficultyId = saved.difficultyId;
+  state.stats = saved.stats;
+  state.hp = saved.hp;
+  state.maxHp = saved.maxHp;
+  state.relics = saved.relics;
+  state.flags = new Set(saved.flags);
+  state.sceneId = saved.sceneId;
+  state.tookNoDamage = saved.tookNoDamage;
+  state.usedClassAbility = saved.usedClassAbility;
+  state.maxRelicsHeld = saved.maxRelicsHeld;
+  state.history = saved.history || [];
+  state.dead = false;
+  state.pendingCheck = null;
+}
+
+function initSettingsFromStorage() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (typeof s.musicVolume === "number") state.musicVolume = s.musicVolume;
+    if (typeof s.sfxVolume === "number") state.sfxVolume = s.sfxVolume;
+    if (s.lang) state.lang = s.lang;
+  } catch (e) {}
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({ musicVolume: state.musicVolume, sfxVolume: state.sfxVolume, lang: state.lang })
+    );
+  } catch (e) {}
+}
+
 document.getElementById("begin-button").addEventListener("click", beginStory);
 
-document.getElementById("retry-button").addEventListener("click", () => {
-  state.screen = "difficulty";
+function resetToFreshCharacter() {
   state.name = "";
   state.classId = null;
   state.difficultyId = null;
@@ -2816,17 +3065,110 @@ document.getElementById("retry-button").addEventListener("click", () => {
   state.sceneId = "start";
   state.dead = false;
   state.pendingCheck = null;
+  state.tookNoDamage = true;
+  state.usedClassAbility = false;
+  state.maxRelicsHeld = 0;
+  state.history = [];
+  state.firstCheckSeen = false;
+  clearSave();
+}
 
+document.getElementById("retry-button").addEventListener("click", () => {
+  resetToFreshCharacter();
   document.getElementById("end-overlay").hidden = true;
   document.getElementById("game-area").hidden = true;
   document.getElementById("intro-overlay").hidden = false;
   renderCreation();
 });
 
+document.getElementById("end-menu-button").addEventListener("click", () => {
+  document.getElementById("end-overlay").hidden = true;
+  document.getElementById("game-area").hidden = true;
+  document.getElementById("main-menu-overlay").hidden = false;
+  document.getElementById("menu-continue-button").disabled = !hasSave();
+});
+
+// ---- Main menu ----
+
+document.getElementById("menu-new-button").addEventListener("click", () => {
+  resetToFreshCharacter();
+  document.getElementById("main-menu-overlay").hidden = true;
+  document.getElementById("intro-overlay").hidden = false;
+  renderCreation();
+});
+
+document.getElementById("menu-continue-button").addEventListener("click", () => {
+  const saved = loadGame();
+  if (!saved) return;
+  applySavedState(saved);
+  document.getElementById("main-menu-overlay").hidden = true;
+  document.getElementById("game-area").hidden = false;
+  renderScene();
+});
+
+// ---- Settings / credits / history panels ----
+
+let screenBeforeSettings = null;
+
+function openSettings() {
+  const screens = ["main-menu-overlay", "intro-overlay", "game-area", "end-overlay"];
+  screenBeforeSettings = screens.find((id) => !document.getElementById(id).hidden) || "main-menu-overlay";
+  document.getElementById(screenBeforeSettings).hidden = true;
+  document.getElementById("music-volume-slider").value = Math.round(state.musicVolume * 100);
+  document.getElementById("sfx-volume-slider").value = Math.round(state.sfxVolume * 100);
+  document.getElementById("settings-overlay").hidden = false;
+}
+
+function closeSettings() {
+  document.getElementById("settings-overlay").hidden = true;
+  if (screenBeforeSettings) document.getElementById(screenBeforeSettings).hidden = false;
+}
+
+document.getElementById("settings-toggle").addEventListener("click", openSettings);
+document.getElementById("menu-settings-button").addEventListener("click", openSettings);
+document.getElementById("settings-back-button").addEventListener("click", closeSettings);
+
+document.getElementById("settings-credits-button").addEventListener("click", () => {
+  document.getElementById("settings-overlay").hidden = true;
+  document.getElementById("credits-overlay").hidden = false;
+});
+
+document.getElementById("credits-back-button").addEventListener("click", () => {
+  document.getElementById("credits-overlay").hidden = true;
+  document.getElementById("settings-overlay").hidden = false;
+});
+
+function renderHistory() {
+  const list = document.getElementById("history-list");
+  list.innerHTML = "";
+  if (state.history.length === 0) {
+    list.textContent = state.lang === "tr" ? "Henüz yol alınmadı." : "No path walked yet.";
+    return;
+  }
+  state.history.forEach((h, i) => {
+    const div = document.createElement("div");
+    div.className = "history-entry";
+    const num = i + 1;
+    div.innerHTML = `<span class="history-scene">${num}. ${t(h)}</span>`;
+    list.appendChild(div);
+  });
+  list.scrollTop = list.scrollHeight;
+}
+
+document.getElementById("history-toggle").addEventListener("click", () => {
+  renderHistory();
+  document.getElementById("game-area").hidden = true;
+  document.getElementById("history-overlay").hidden = false;
+});
+
+document.getElementById("history-back-button").addEventListener("click", () => {
+  document.getElementById("history-overlay").hidden = true;
+  document.getElementById("game-area").hidden = false;
+});
+
 // ---- Loading screen ----
 // Waits on the font and a short minimum so the loading beat actually
-// reads as a beat instead of a flicker, then hands off to character
-// creation.
+// reads as a beat instead of a flicker, then hands off to the main menu.
 
 function runLoadingScreen() {
   const fill = document.getElementById("loading-bar-fill");
@@ -2846,10 +3188,12 @@ function runLoadingScreen() {
 
   Promise.all([minWait, fontsReady]).then(() => {
     document.getElementById("loading-screen").hidden = true;
-    document.getElementById("intro-overlay").hidden = false;
+    document.getElementById("main-menu-overlay").hidden = false;
+    document.getElementById("menu-continue-button").disabled = !hasSave();
   });
 }
 
+initSettingsFromStorage();
 applyStaticLang();
 renderCreation();
 runLoadingScreen();
