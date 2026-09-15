@@ -93,9 +93,14 @@ body::before {
 .ember:nth-child(6) { left: 82%; animation-duration: 11s; animation-delay: 4s; }
 .ember:nth-child(7) { left: 94%; animation-duration: 12s; animation-delay: 2s; }
 
-header, main, footer {
+header, footer {
   position: relative;
   z-index: 1;
+}
+
+main {
+  position: relative;
+  z-index: 2;
 }
 
 header {
