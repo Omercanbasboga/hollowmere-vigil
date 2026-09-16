@@ -37,6 +37,51 @@ const CLASSES = {
   },
 };
 
+const RACES = {
+  elf: {
+    id: "elf",
+    name: { en: "Elf", tr: "Elf" },
+    desc: {
+      en: "Quick and sharp-eyed, at home in old, half-forgotten places.",
+      tr: "Çevik ve keskin gözlü, yarı unutulmuş eski yerlerde kendini evinde hisseder.",
+    },
+    bonus: { dex: 2, int: 1 },
+    trait: {
+      en: "Keen Senses: your first Wisdom check each vigil succeeds automatically.",
+      tr: "Keskin Duyular: her nöbette ilk Sezgi kontrolün otomatik başarılı sayılır.",
+    },
+  },
+  dwarf: {
+    id: "dwarf",
+    name: { en: "Dwarf", tr: "Cüce" },
+    desc: {
+      en: "Built low and solid. Takes more than a bad fall to put one down.",
+      tr: "Alçak ve sağlam yapılı. Onu yere sermek kötü bir düşüşten fazlasını gerektirir.",
+    },
+    bonus: { con: 2, str: 1 },
+    trait: {
+      en: "Stonebound: the first hit you take each vigil deals half damage.",
+      tr: "Taş Gibi: her nöbette aldığın ilk darbe yarı hasar verir.",
+    },
+  },
+  human: {
+    id: "human",
+    name: { en: "Human", tr: "İnsan" },
+    desc: {
+      en: "No particular gift, just enough range to make up for it.",
+      tr: "Belirgin bir yeteneği yok, ama açığını kapatacak kadar çok yönlü.",
+    },
+    bonus: { cha: 2, wis: 1 },
+    trait: {
+      en: "Adaptable: one extra point to spend when building your Warden.",
+      tr: "Uyum Sağlayan: Muhafızını oluştururken harcayacağın bir puan fazladan.",
+    },
+  },
+};
+
+const POINT_BUY_BUDGET = 27;
+const POINT_BUY_COSTS = [0, 1, 2, 3, 4, 5, 7, 9]; // index 0 = score 8, index 7 = score 15
+
 const DIFFICULTIES = {
   easy: {
     id: "easy",
@@ -92,9 +137,11 @@ const state = {
   screen: "difficulty",
   name: "",
   classId: null,
+  raceId: null,
   difficultyId: null,
-  stats: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 },
-  pointsLeft: 6,
+  baseStats: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 },
+  stats: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 },
+  pointBuyLeft: POINT_BUY_BUDGET,
   hp: 10,
   maxHp: 10,
   relics: [],
@@ -133,6 +180,10 @@ function hasAnyFlag(...names) {
 }
 
 function damage(n) {
+  if (state.raceId === "dwarf" && !state.flags.has("dwarf_trait_used")) {
+    state.flags.add("dwarf_trait_used");
+    n = Math.max(1, Math.floor(n / 2));
+  }
   const before = state.hp;
   state.hp = Math.max(0, state.hp - n);
   if (state.hp < before) {
@@ -170,8 +221,19 @@ function rollCheck(statKey, dc) {
   const statValue = state.stats[statKey];
   const total = roll + statValue;
   const target = dc + difficultyMod();
-  const success = total >= target;
+  let success = total >= target;
+  if (statKey === "wis" && state.raceId === "elf" && !state.flags.has("elf_trait_used")) {
+    state.flags.add("elf_trait_used");
+    success = true;
+  }
   return { roll, statValue, total, target, success, statKey };
+}
+
+function recomputeStats() {
+  const bonus = state.raceId ? RACES[state.raceId].bonus : {};
+  ["str", "dex", "con", "int", "wis", "cha"].forEach((key) => {
+    state.stats[key] = state.baseStats[key] + (bonus[key] || 0);
+  });
 }
 
 // Scene text, choices and checks. A "check" choice rolls a d20 against a
@@ -233,6 +295,21 @@ const serpentBranch = {
           next: "serpent_03",
           effect: () => { damage(2); },
           text: { en: "Your foot slides out and you go down hard, catching yourself against the wall.", tr: "Ayağın kayıyor, sert bir şekilde düşüyorsun ama kendini duvara tutunarak topluyorsun." },
+        },
+      },
+      {
+        label: { en: "Read the current before you step", tr: "Adım atmadan önce akıntıyı oku" },
+        type: "check",
+        stat: "wis",
+        dc: 9,
+        onSuccess: {
+          next: "serpent_03",
+          text: { en: "You watch how the water moves and time your steps to the lulls between surges.", tr: "Suyun nasıl hareket ettiğini izliyor, adımlarını dalgalar arasındaki duraklamalara göre ayarlıyorsun." },
+        },
+        onFail: {
+          next: "serpent_03",
+          effect: () => { damage(2); },
+          text: { en: "You misjudge a surge and it takes your legs out from under you.", tr: "Bir dalgayı yanlış okuyorsun, bacaklarını altından kaydırıyor." },
         },
       },
     ],
@@ -320,6 +397,22 @@ const serpentBranch = {
           text: { en: "The crate splits wrong and something sharp inside catches your hand.", tr: "Sandık yanlış açılıyor, içindeki keskin bir şey elini kesiyor." },
         },
       },
+      {
+        label: { en: "Muscle the lid loose", tr: "Kapağı zorla aç" },
+        type: "check",
+        stat: "con",
+        dc: 9,
+        onSuccess: {
+          next: "serpent_05",
+          effect: () => { state.relics.push("old tow rope"); },
+          text: { en: "You brace and heave until the swollen wood finally gives, coil of rope inside.", tr: "Şişmiş tahta sonunda dayanamayana kadar direnip zorluyorsun, içinde bir halat var." },
+        },
+        onFail: {
+          next: "serpent_05",
+          effect: () => { damage(1); },
+          text: { en: "The lid gives all at once and you wrench your shoulder catching your balance.", tr: "Kapak aniden açılıyor, dengeni tutmaya çalışırken omzunu inciteceksin." },
+        },
+      },
       { label: { en: "Leave it, keep moving", tr: "Bırak, devam et" }, next: "serpent_05" },
     ],
   },
@@ -373,6 +466,14 @@ const serpentBranch = {
         onSuccess: { next: "serpent_06", text: { en: "The side channel is tighter and colder, but you squeeze through.", tr: "Yan kanal daha dar ve daha soğuk ama sıyrılıp geçiyorsun." } },
         onFail: { next: "serpent_06", effect: () => { damage(2); }, text: { en: "The current is stronger than it looks and slams you into the wall before you fight free.", tr: "Akıntı göründüğünden güçlü çıkıyor, seni duvara çarpıyor, zor bela kurtuluyorsun." } },
       },
+      {
+        label: { en: "Time it with the water's push", tr: "Suyun itişiyle zamanla" },
+        type: "check",
+        stat: "wis",
+        dc: 10,
+        onSuccess: { next: "serpent_06", text: { en: "You feel the rhythm of the gate's give and lean into it at the right moment.", tr: "Kapının açılış ritmini hissediyor, doğru anda ağırlığını veriyorsun." } },
+        onFail: { next: "serpent_06", effect: () => { damage(1); }, text: { en: "You time it wrong and the gate shudders back against your shoulder.", tr: "Zamanlamayı yanlış yapıyorsun, kapı geri tepip omzuna çarpıyor." } },
+      },
     ],
   },
 
@@ -416,6 +517,14 @@ const serpentBranch = {
         onSuccess: { next: "serpent_08", text: { en: "You force through the current before they can react.", tr: "Onlar tepki veremeden akıntının içinden geçiyorsun." } },
         onFail: { next: "serpent_08", effect: () => { damage(1); }, text: { en: "You come out the other side stung more than once.", tr: "Karşı tarafa birden fazla ısırıkla çıkıyorsun." } },
       },
+      {
+        label: { en: "Grit through it, teeth bared", tr: "Dişini sık, direne direne geç" },
+        type: "check",
+        stat: "con",
+        dc: 9,
+        onSuccess: { next: "serpent_08", text: { en: "A few bites land but your body barely registers them, and you're through.", tr: "Birkaç ısırık isabet ediyor ama vücudun neredeyse fark bile etmiyor, geçiyorsun." } },
+        onFail: { next: "serpent_08", effect: () => { damage(1); }, text: { en: "You push through, but not without paying for it.", tr: "İçlerinden geçiyorsun ama bedelsiz olmuyor." } },
+      },
     ],
   },
 
@@ -429,6 +538,14 @@ const serpentBranch = {
     choices: [
       { label: { en: "Take the submerged stairwell", tr: "Sular altındaki merdivene gir" }, next: "serpent_09a" },
       { label: { en: "Take the upper walkway", tr: "Üstteki yürüyüş yolunu tut" }, next: "serpent_09b" },
+      {
+        label: { en: "Leap for the stairwell blind, don't check the drop", tr: "Bakmadan merdivene atla, kontrol etmeye vakit yok" },
+        type: "check",
+        stat: "str",
+        dc: 13,
+        onSuccess: { next: "serpent_10", text: { en: "You clear the drop in one reckless bound and land running, well ahead of where the careful route would've put you.", tr: "Düşüşü tek bir çılgın sıçrayışla aşıyor, koşarak iniyorsun, dikkatli yoldan çok daha ilerideysin." } },
+        onFail: { next: "serpent_10", effect: () => { damage(9); }, text: { en: "You misjudge the drop completely and slam into submerged rubble you never saw coming, the impact driving the breath clean out of you.", tr: "Düşüşü tamamen yanlış hesaplıyorsun, hiç görmediğin sular altındaki molozlara çarpıyorsun, darbe nefesini tamamen kesiyor." } },
+      },
     ],
   },
 
@@ -454,6 +571,18 @@ const serpentBranch = {
         onSuccess: { next: "serpent_10", text: { en: "You break the surface right as your breath was about to give out.", tr: "Nefesin tükenmek üzereyken tam vaktinde yüzeye çıkıyorsun." } },
         onFail: { next: "serpent_10", effect: () => { damage(2); }, text: { en: "Your chest burns before you break the surface again, and you come up coughing water.", tr: "Yeniden yüzeye çıkmadan önce göğsün yanıyor, öksürerek su çıkarıyorsun." } },
       },
+      {
+        label: { en: "Speak a breath-ward before you dive", tr: "Dalmadan önce bir nefes duası oku" },
+        classOnly: "rite",
+        next: "serpent_10",
+        text: { en: "The old sailor-Wardens had a rite for exactly this. Your lungs hold longer than they should, and you surface calm.", tr: "Eski denizci Muhafızların tam bunun için bir ayini vardı. Ciğerlerin olması gerekenden fazla dayanıyor, sakin bir şekilde yüzeye çıkıyorsun." },
+      },
+      {
+        label: { en: "Force yourself past the burn, don't come up for air", tr: "Yanmaya aldırma, nefes almak için çıkma" },
+        next: "serpent_10",
+        effect: () => { damage(8); },
+        text: { en: "You push straight through on will alone, ignoring every signal your body is screaming at you. You make it, but your body makes you pay for it after.", tr: "Sadece iradenle dosdoğru geçiyorsun, vücudunun bağırdığı her uyarıyı görmezden geliyorsun. Geçiyorsun ama vücudun bunun bedelini sonra çıkarıyor." },
+      },
     ],
   },
 
@@ -472,6 +601,14 @@ const serpentBranch = {
         dc: 8,
         onSuccess: { next: "serpent_10", effect: () => { state.relics.push("waterproof lantern"); }, text: { en: "You work it loose. It's a lantern, sealed tight, still dry inside.", tr: "Yerinden söküyorsun. Sıkıca kapatılmış bir fener, içi hâlâ kuru." } },
         onFail: { next: "serpent_10", text: { en: "It's wedged too tight to free without more time than you have.", tr: "Vaktin yetmediği kadar sıkı sıkışmış, çıkaramıyorsun." } },
+      },
+      {
+        label: { en: "Listen to the beam before trusting your weight", tr: "Ağırlığını vermeden önce kirişi dinle" },
+        type: "check",
+        stat: "wis",
+        dc: 8,
+        onSuccess: { next: "serpent_10", text: { en: "The creak tells you exactly where not to step, and the walkway holds true.", tr: "Gıcırtı tam olarak nereye basmaman gerektiğini söylüyor, yürüyüş yolu sağlam kalıyor." } },
+        onFail: { next: "serpent_10", effect: () => { damage(1); }, text: { en: "You read it wrong and a plank drops out from under your heel.", tr: "Yanlış okuyorsun, bir tahta topuğunun altından kayıp gidiyor." } },
       },
       { label: { en: "Leave it, keep going", tr: "Bırak, devam et" }, next: "serpent_10" },
     ],
@@ -554,6 +691,14 @@ const serpentBranch = {
         onSuccess: { next: "serpent_12", effect: () => { state.relics.push("a handful of old coin"); }, text: { en: "The mechanism gives after some patient work.", tr: "Sabırlı bir uğraştan sonra mekanizma açılıyor." } },
         onFail: { next: "serpent_12", text: { en: "The lock won't budge, and you're not going to waste more time on it.", tr: "Kilit hiç açılmıyor, daha fazla vakit harcamayacaksın." } },
       },
+      {
+        label: { en: "Put everything into one wrench, lock or hand", tr: "Tek bir hamlede tüm gücünü ver, kilit ya da elin" },
+        type: "check",
+        stat: "str",
+        dc: 12,
+        onSuccess: { next: "serpent_12", effect: () => { state.relics.push("a handful of old coin"); }, text: { en: "The rusted hasp shears clean off under the force.", tr: "Paslı mandal bu güç karşısında tertemiz kopuyor." } },
+        onFail: { next: "serpent_12", effect: () => { damage(9); }, text: { en: "The box doesn't give, but the corroded edge does, tearing open under your hand as you throw your full weight into it.", tr: "Kasa açılmıyor ama paslı kenarı açılıyor, tüm ağırlığınla asılırken elinin altında yırtılıyor." } },
+      },
       { label: { en: "Leave it", tr: "Bırak" }, next: "serpent_12" },
     ],
   },
@@ -583,6 +728,14 @@ const serpentBranch = {
         onFail: { next: "serpent_14", effect: () => { damage(2); }, text: { en: "A jagged edge catches your side on the way through.", tr: "Geçerken sivri bir kenar yanını çiziyor." } },
       },
       { label: { en: "Find the maintenance shaft", tr: "Bakım bacasını bul" }, next: "serpent_13" },
+      {
+        label: { en: "Force through the unstable wreck before it gives way entirely", tr: "Tamamen çökmeden önce dengesiz enkazı zorla geç" },
+        type: "check",
+        stat: "con",
+        dc: 12,
+        onSuccess: { next: "serpent_14", text: { en: "You shoulder through the groaning wreckage before it can decide to collapse on you.", tr: "Enkaz çökmeye karar vermeden önce inleyen yığının içinden omuzla geçiyorsun." } },
+        onFail: { next: "serpent_14", effect: () => { damage(10); }, text: { en: "The whole gate structure comes down around you as you force it, iron and stone burying you for a terrible few seconds before you claw free.", tr: "Zorlarken tüm kapı yapısı üstüne çöküyor, demir ve taş seni birkaç korkunç saniyeliğine gömüyor, sonunda zor bela kendini kurtarıyorsun." } },
+      },
     ],
   },
 
@@ -614,6 +767,14 @@ const serpentBranch = {
         onSuccess: { next: "serpent_14", text: { en: "You get lucky, and the valves click into place cleanly.", tr: "Şansın yaver gidiyor, vanalar sorunsuzca yerine oturuyor." } },
         onFail: { next: "serpent_14", effect: () => { damage(2); }, text: { en: "You get it wrong, and cold water surges through the shaft before you scramble out.", tr: "Yanlış çeviriyorsun, bacadan soğuk su fışkırıyor, zor bela dışarı çıkıyorsun." } },
       },
+      {
+        label: { en: "Yank all three valves at once and hope", tr: "Üçünü birden çek, gerisi şansına kalsın" },
+        type: "check",
+        stat: "dex",
+        dc: 11,
+        onSuccess: { next: "serpent_14", text: { en: "Somehow your hands find the right grip on all three at once, and the shaft stays dry.", tr: "Nedense üçüne de doğru şekilde tutunuyorsun, baca kuru kalıyor." } },
+        onFail: { next: "serpent_14", effect: () => { damage(8); }, text: { en: "All three give at once and the shaft floods in an instant, the pressure slamming you against the pipe wall before you drag yourself out.", tr: "Üçü de birden açılıyor, baca bir anda su ile doluyor, basınç seni boru duvarına çarpıyor, zor bela kendini dışarı sürüklüyorsun." } },
+      },
     ],
   },
 
@@ -641,6 +802,18 @@ const serpentBranch = {
         onSuccess: { next: "serpent_15", text: { en: "It decides you're not worth the trouble and sinks away.", tr: "Uğraşmaya değmeyeceğine karar veriyor ve dibe çekiliyor." } },
         onFail: { next: "serpent_15", effect: () => { damage(1); }, text: { en: "It lunges once to test you, then withdraws.", tr: "Seni denemek için bir kez saldırıyor, sonra çekiliyor." } },
       },
+      { label: { en: "Meet its gaze, dare it closer", tr: "Bakışını karşıla, yaklaşmaya davet et" }, type: "check", stat: "cha", dc: 10,
+        onSuccess: { next: "serpent_15", text: { en: "You hold its stare without flinching, and something in your nerve makes it think twice.", tr: "Gözünü kırpmadan bakışını tutuyorsun, cesaretindeki bir şey onu iki kez düşündürüyor." } },
+        onFail: { next: "serpent_15", effect: () => { damage(1); }, text: { en: "It doesn't read the challenge the way you meant it, and snaps forward before losing interest.", tr: "Meydan okumayı istediğin gibi okumuyor, ilgisini kaybetmeden önce bir kez sana doğru fırlıyor." } },
+      },
+      {
+        label: { en: "Try to wrestle straight past its coils", tr: "Kıvrımlarının arasından zorla geçmeyi dene" },
+        type: "check",
+        stat: "str",
+        dc: 12,
+        onSuccess: { next: "serpent_15", text: { en: "You shove its heavy coils aside before it can tighten and force your way past.", tr: "Sıkılaşmadan önce ağır kıvrımlarını itip zorla yanından geçiyorsun." } },
+        onFail: { next: "serpent_15", effect: () => { damage(10); }, text: { en: "It tightens around your arm the moment you touch it, and it takes everything you have to break free before it decides to squeeze in earnest.", tr: "Dokunduğun an koluna sarılıyor, gerçekten sıkmaya karar vermeden önce kurtulmak tüm gücünü alıyor." } },
+      },
     ],
   },
 
@@ -660,6 +833,14 @@ const serpentBranch = {
         label: { en: "Notice the gap in the planking", tr: "Tahtaların arasındaki aralığı fark et" },
         classOnly: "shadow",
         next: "serpent_15c",
+      },
+      {
+        label: { en: "Power through, ignore the give underfoot", tr: "Ayağının altındaki oynamaya aldırma, güçle geç" },
+        type: "check",
+        stat: "con",
+        dc: 10,
+        onSuccess: { next: "serpent_16", text: { en: "Planks crack under you but your legs carry you across before any of them fully let go.", tr: "Altında tahtalar çatlıyor ama hiçbiri tam bırakmadan bacakların seni karşıya taşıyor." } },
+        onFail: { next: "serpent_16", effect: () => { damage(2); }, text: { en: "Your weight is too much for the rot and you crash through to open water, dragging yourself back up soaked and bruised.", tr: "Ağırlığın çürümüş tahtaya fazla geliyor, açık suya düşüyorsun, sırılsıklam ve morarmış halde kendini yukarı çekiyorsun." } },
       },
     ],
   },
@@ -724,6 +905,10 @@ const serpentBranch = {
         onSuccess: { next: "serpent_18", text: { en: "You keep your head and push clear of them.", tr: "Soğukkanlılığını koruyup aralarından sıyrılıyorsun." } },
         onFail: { next: "serpent_18", effect: () => { damage(2); }, text: { en: "They get several bites in before you break free.", tr: "Kurtulmadan önce birkaç kez ısırıyorlar." } },
       },
+      { label: { en: "Read where they're thinnest and slip through", tr: "En seyrek oldukları yeri oku, aradan sıyrıl" }, type: "check", stat: "wis", dc: 10,
+        onSuccess: { next: "serpent_18", text: { en: "You spot the gap in their agitated circling and thread it clean.", tr: "Tedirgin dolanışlarındaki boşluğu görüyor, temiz bir şekilde geçiyorsun." } },
+        onFail: { next: "serpent_18", effect: () => { damage(2); }, text: { en: "You read it wrong and swim straight into the thick of them.", tr: "Yanlış okuyorsun, doğruca kalabalıklarının ortasına yüzüyorsun." } },
+      },
     ],
   },
 
@@ -756,6 +941,12 @@ const serpentBranch = {
         onSuccess: { next: "serpent_19", text: { en: "You spot a crack letting in clean air and route around the worst of it.", tr: "Temiz hava sızan bir çatlak buluyor, en kötüsünden kaçınarak dolanıyorsun." } },
         onFail: { next: "serpent_19", effect: () => { damage(1); }, text: { en: "You can't find a way around it in time and push through anyway.", tr: "Zamanında bir yol bulamıyor, mecburen içinden geçiyorsun." } },
       },
+      {
+        label: { en: "Take the low crawl smugglers used to skip this", tr: "Kaçakçıların kullandığı alçak geçitten atla" },
+        classOnly: "shadow",
+        next: "serpent_19",
+        text: { en: "You know the trick to this kind of chamber, a crawl low along the floor where the bad air never settles. You barely breathe any of it.", tr: "Bu tür bir odanın hilesini biliyorsun, kötü havanın hiç çökmediği zeminin dibinden sürünerek geçiyorsun. Neredeyse hiç solumuyorsun." },
+      },
     ],
   },
 
@@ -777,6 +968,14 @@ const serpentBranch = {
       { label: { en: "Try to stabilize it", tr: "Dengelemeye çalış" }, type: "check", stat: "int", dc: 12,
         onSuccess: { next: "serpent_20", effect: () => { heal(1); }, text: { en: "You find the right thread and the stone settles.", tr: "Doğru ipliği buluyorsun, taş yatışıyor." } },
         onFail: { next: "serpent_20", effect: () => { damage(1); }, text: { en: "You push the wrong thread of the working and it snaps back at you.", tr: "İşleyişin yanlış ipliğini itiyorsun, geri tepiyor." } },
+      },
+      {
+        label: { en: "Force the working through by sheer will", tr: "Salt iradenle işleyişi zorla geçir" },
+        type: "check",
+        stat: "wis",
+        dc: 12,
+        onSuccess: { next: "serpent_20", effect: () => { heal(1); }, text: { en: "You push past what caution would allow and the stone settles under the sheer force of your intent.", tr: "Sağduyunun izin vereceğinden fazlasını zorluyorsun, taş iradenin ağırlığı altında yatışıyor." } },
+        onFail: { next: "serpent_20", effect: () => { damage(8); }, text: { en: "The working rejects you completely, and whatever's left of it discharges straight back through your hands.", tr: "İşleyiş seni tamamen reddediyor, geriye kalan her ne ise doğrudan ellerinden geri boşalıyor." } },
       },
       { label: { en: "Leave it alone", tr: "Dokunma" }, next: "serpent_20" },
     ],
@@ -806,6 +1005,14 @@ const serpentBranch = {
       { label: { en: "Jump the gap", tr: "Boşluğu atla" }, type: "check", stat: "str", dc: 11,
         onSuccess: { next: "serpent_21", text: { en: "You clear it with room to spare.", tr: "Rahatlıkla atlayıp geçiyorsun." } },
         onFail: { next: "serpent_21", effect: () => { damage(2); }, text: { en: "You come up short and scramble the rest of the way, half in the water.", tr: "Yeterince uzağa atlayamıyorsun, yarı suyun içinde zor bela geri kalanını geçiyorsun." } },
+      },
+      {
+        label: { en: "Sprint straight across, no careful steps", tr: "Dikkatli adım atmadan koşarak geç" },
+        type: "check",
+        stat: "dex",
+        dc: 13,
+        onSuccess: { next: "serpent_21", text: { en: "Momentum carries you across before the beam even has a chance to test your balance.", tr: "İvmenin sayesinde kiriş dengeni sınamaya fırsat bulamadan karşıya geçiyorsun." } },
+        onFail: { next: "serpent_21", effect: () => { damage(9); }, text: { en: "Your foot catches the edge at full speed and you go down into deep water hard, cracking against something below the surface before you claw back up.", tr: "Tam hızdayken ayağın kenara takılıyor, derin suya sert bir şekilde düşüyor, çıkmadan önce suyun altındaki bir şeye çarpıyorsun." } },
       },
     ],
   },
@@ -854,6 +1061,21 @@ const serpentBranch = {
       { label: { en: "Read its strikes and dodge through", tr: "Saldırılarını oku, sıyrılarak geç" }, type: "check", stat: "dex", dc: 11,
         onSuccess: { next: "serpent_23", text: { en: "You time it perfectly and slip past between strikes.", tr: "Zamanlamanı mükemmel ayarlıyor, saldırıların arasından sıyrılıyorsun." } },
         onFail: { next: "serpent_23", effect: () => { damage(2); }, text: { en: "You misjudge one strike and pay for it.", tr: "Bir saldırıyı yanlış okuyorsun, bedelini ödüyorsun." } },
+      },
+      {
+        label: { en: "Trust your training, meet it blade first", tr: "Eğitimine güven, kılıcınla karşıla" },
+        classOnly: "blade",
+        next: "serpent_23",
+        effect: () => { damage(1); },
+        text: { en: "This is exactly what you were trained for. You take one glancing hit and put it down clean.", tr: "Tam olarak bunun için yetiştirildin. Sıyırıcı bir darbe alıyorsun ama onu temiz bir şekilde alt ediyorsun." },
+      },
+      {
+        label: { en: "Go all-in for a killing blow, guard be damned", tr: "Savunmayı unut, öldürücü darbe için her şeyini ortaya koy" },
+        type: "check",
+        stat: "str",
+        dc: 14,
+        onSuccess: { next: "serpent_23", text: { en: "You put your whole weight behind one strike and it ends there, clean and sudden.", tr: "Tüm ağırlığını tek bir darbenin arkasına koyuyorsun, her şey aniden ve temiz bir şekilde bitiyor." } },
+        onFail: { next: "serpent_23", effect: () => { damage(12); }, text: { en: "You leave yourself completely open going for the finish, and it makes you pay for every bit of that opening before you finally stagger clear.", tr: "Bitirmek için kendini tamamen açık bırakıyorsun, zar zor kurtulmadan önce bu açığın bedelini fazlasıyla ödüyorsun." } },
       },
     ],
   },
@@ -937,6 +1159,10 @@ const ashlingBranch = {
         onSuccess: { next: "ashling_03", text: { en: "You cross without a single tile giving way.", tr: "Tek bir fayans bile çökmeden karşıya geçiyorsun." } },
         onFail: { next: "ashling_03", effect: () => { damage(2); }, text: { en: "A tile gives way under your foot and you drop through to the ankle before pulling free.", tr: "Ayağının altında bir fayans çöküyor, bileğine kadar batıyorsun ama zor bela çıkıyorsun." } },
       },
+      { label: { en: "Push through at a steady, heavy pace", tr: "Sabit ve ağır bir tempoyla ilerle" }, type: "check", stat: "con", dc: 9,
+        onSuccess: { next: "ashling_03", text: { en: "Your weight never lingers long enough on any one tile to matter.", tr: "Ağırlığın hiçbir fayansın üzerinde önem taşıyacak kadar uzun kalmıyor." } },
+        onFail: { next: "ashling_03", effect: () => { damage(2); }, text: { en: "The heat and the strain catch up with you at once, and you go down through a cracked section.", tr: "Sıcaklık ve gerginlik birden üstüne çöküyor, çatlak bir bölümden aşağı düşüyorsun." } },
+      },
     ],
   },
 
@@ -951,6 +1177,10 @@ const ashlingBranch = {
       { label: { en: "Climb across", tr: "Tırmanarak geç" }, type: "check", stat: "str", dc: 9,
         onSuccess: { next: "ashling_03", text: { en: "You pick your handholds well and cross without trouble.", tr: "Tutunacak yerleri iyi seçiyor, sorunsuzca geçiyorsun." } },
         onFail: { next: "ashling_03", effect: () => { damage(1); }, text: { en: "A loose stone shifts and scrapes your leg on the way down.", tr: "Gevşek bir taş kayıyor, inerken bacanı sıyırıyor." } },
+      },
+      { label: { en: "Sense which stones will hold before you commit", tr: "Yüklenmeden önce hangi taşın tutacağını sez" }, type: "check", stat: "wis", dc: 9,
+        onSuccess: { next: "ashling_03", text: { en: "Something about the way the light sits on each stone tells you which ones are sound.", tr: "Işığın her taşın üzerine düşüş şekli, hangilerinin sağlam olduğunu söylüyor sana." } },
+        onFail: { next: "ashling_03", effect: () => { damage(1); }, text: { en: "You guess wrong about one stone and it shifts right as you put your weight on it.", tr: "Bir taş hakkında yanlış tahmin ediyorsun, tam ağırlığını verdiğin anda kayıyor." } },
       },
     ],
   },
@@ -992,6 +1222,10 @@ const ashlingBranch = {
       { label: { en: "Open the drawer carefully", tr: "Çekmeceyi dikkatle aç" }, type: "check", stat: "dex", dc: 8,
         onSuccess: { next: "ashling_05", effect: () => { state.relics.push("scorched cloak"); }, text: { en: "It comes loose intact, a cloak folded inside, scorched but wearable.", tr: "Bozulmadan çıkıyor, içinde katlanmış bir pelerin var, kavrulmuş ama giyilebilir." } },
         onFail: { next: "ashling_05", effect: () => { damage(1); }, text: { en: "It crumbles the moment you touch it, and a puff of hot ash catches you in the face.", tr: "Dokunur dokunmaz dağılıyor, sıcak bir kül bulutu yüzüne çarpıyor." } },
+      },
+      { label: { en: "Study the frame before touching it", tr: "Dokunmadan önce çerçeveyi incele" }, type: "check", stat: "int", dc: 9,
+        onSuccess: { next: "ashling_05", effect: () => { state.relics.push("scorched cloak"); }, text: { en: "You spot exactly where the heat weakened the joints and lift it free without stressing the rest.", tr: "Isının eklemleri tam olarak nerede zayıflattığını görüyor, geri kalanını zorlamadan kaldırıyorsun." } },
+        onFail: { next: "ashling_05", effect: () => { damage(1); }, text: { en: "You read the frame wrong and it collapses in a puff of hot ash right against your hand.", tr: "Çerçeveyi yanlış okuyorsun, elinin dibinde sıcak bir kül bulutu içinde çöküyor." } },
       },
       { label: { en: "Leave it", tr: "Bırak" }, next: "ashling_05" },
     ],
@@ -1082,6 +1316,20 @@ const ashlingBranch = {
     choices: [
       { label: { en: "Cross the catwalk", tr: "Geçitten geç" }, next: "ashling_09a" },
       { label: { en: "Take the cellar route", tr: "Mahzen yolunu tut" }, next: "ashling_09b" },
+      {
+        label: { en: "Run it, don't feel the heat", tr: "Koş geç, sıcağı hissetme" },
+        type: "check",
+        stat: "con",
+        dc: 13,
+        onSuccess: { next: "ashling_10", text: { en: "You're across before the heat has time to do anything but sting.", tr: "Sıcaklığın seni yakmaya vakti olmadan karşıya geçiyorsun." } },
+        onFail: { next: "ashling_10", effect: () => { damage(9); }, text: { en: "You misjudge your footing at a dead run and go down hard against the embers before scrambling clear.", tr: "Tam hızdayken adımını yanlış hesaplıyor, korların üzerine sert bir şekilde düşüyorsun, zor bela kendini kurtarıyorsun." } },
+      },
+      {
+        label: { en: "Cross the rail light and fast, feet barely touching", tr: "Ray boyunca hafif ve hızlı geç, ayakların zar zor değsin" },
+        classOnly: "shadow",
+        next: "ashling_10",
+        text: { en: "You've walked worse ledges than this. You're across before the heat below even registers.", tr: "Bundan daha kötü çıkıntılarda yürüdün. Alttaki sıcaklık daha fark edilmeden karşıya geçiyorsun." },
+      },
     ],
   },
 
@@ -1102,6 +1350,20 @@ const ashlingBranch = {
       { label: { en: "Cross carefully", tr: "Dikkatlice geç" }, type: "check", stat: "dex", dc: 11,
         onSuccess: { next: "ashling_10", text: { en: "You keep your pace even and make it across.", tr: "Adımlarını düzenli tutuyor, karşıya geçiyorsun." } },
         onFail: { next: "ashling_10", effect: () => { damage(2); }, text: { en: "The heat gets to you halfway and you stumble the rest of the way across.", tr: "Yarı yolda sıcaklık seni zorluyor, geri kalanını sendeleyerek geçiyorsun." } },
+      },
+      {
+        label: { en: "Just walk it like nothing", tr: "Hiçbir şey yokmuş gibi yürü, geç" },
+        classOnly: "blade",
+        next: "ashling_10",
+        text: { en: "Your training has dealt with worse than heat off a bed of coals. You just walk it.", tr: "Eğitimin bir kor yatağının sıcaklığından daha kötüsüyle uğraştı. Sen sadece yürüyerek geçiyorsun." },
+      },
+      {
+        label: { en: "Vault clean over the worst of it, ready or not", tr: "Hazır olsan da olmasan da en kötü kısmın üzerinden atla" },
+        type: "check",
+        stat: "str",
+        dc: 12,
+        onSuccess: { next: "ashling_10", text: { en: "You clear the hottest stretch in a single powerful jump.", tr: "En sıcak kısmı tek bir güçlü sıçrayışla aşıyorsun." } },
+        onFail: { next: "ashling_10", effect: () => { damage(9); }, text: { en: "You come down short, straight into the heart of the embers, and it takes real effort to throw yourself clear again.", tr: "Kısa düşüyorsun, doğrudan korların ortasına, kendini yeniden kurtarmak gerçek bir çaba gerektiriyor." } },
       },
     ],
   },
@@ -1184,6 +1446,18 @@ const ashlingBranch = {
         onSuccess: { next: "ashling_12", effect: () => { state.relics.push("a small brass icon"); }, text: { en: "The hinge finally gives without breaking anything inside.", tr: "Menteşe sonunda içindekini bozmadan açılıyor." } },
         onFail: { next: "ashling_12", text: { en: "It won't budge, and you're not going to waste more time on it.", tr: "Hiç açılmıyor, daha fazla vakit harcamayacaksın." } },
       },
+      { label: { en: "Pick at the warped hinge with care", tr: "Kaynaşmış menteşeyi özenle çöz" }, type: "check", stat: "dex", dc: 9,
+        onSuccess: { next: "ashling_12", effect: () => { state.relics.push("a small brass icon"); }, text: { en: "You work the pin free with small, patient movements.", tr: "İğneyi küçük, sabırlı hareketlerle yerinden çıkarıyorsun." } },
+        onFail: { next: "ashling_12", text: { en: "Your fingers slip and you decide it's not worth another try.", tr: "Parmakların kayıyor, bir daha denemeye değmeyeceğine karar veriyorsun." } },
+      },
+      {
+        label: { en: "Rip the whole box apart with your hands", tr: "Kutuyu elinle parçala" },
+        type: "check",
+        stat: "str",
+        dc: 12,
+        onSuccess: { next: "ashling_12", effect: () => { state.relics.push("a small brass icon"); }, text: { en: "The warped metal shrieks and gives all at once, but it gives.", tr: "Bükülmüş metal çığlık atarak birden veriyor, ama veriyor." } },
+        onFail: { next: "ashling_12", effect: () => { damage(9); }, text: { en: "The metal tears wrong under your grip and a jagged edge opens your palm to the bone.", tr: "Metal, tutuşunun altında yanlış bir şekilde yırtılıyor, keskin bir kenar avucunu kemiğe kadar açıyor." } },
+      },
       { label: { en: "Leave it", tr: "Bırak" }, next: "ashling_12" },
     ],
   },
@@ -1198,6 +1472,14 @@ const ashlingBranch = {
     choices: [
       { label: { en: "Just climb through the rubble", tr: "Molozun içinden zorla geç" }, classOnly: "blade", next: "ashling_14", effect: () => { damage(1); } },
       { label: { en: "Try the braziers", tr: "Mangalları dene" }, next: "ashling_13" },
+      {
+        label: { en: "Dive through a gap in the collapse before it settles more", tr: "Daha fazla çökmeden çöküntüdeki bir aralıktan dal" },
+        type: "check",
+        stat: "dex",
+        dc: 12,
+        onSuccess: { next: "ashling_14", text: { en: "You spot a gap low in the rubble and thread through it before anything else has a chance to shift.", tr: "Molozun altında bir aralık görüyor, başka bir şey kaymaya fırsat bulamadan aradan sıyrılıyorsun." } },
+        onFail: { next: "ashling_14", effect: () => { damage(10); }, text: { en: "The gap closes around you halfway through, hot stone grinding down on your shoulders before it finally shifts enough to let you through.", tr: "Aralık tam ortasındayken üzerine kapanıyor, sıcak taş omuzlarını ezene kadar yükleniyor, sonunda geçmene yetecek kadar açılıyor." } },
+      },
     ],
   },
 
@@ -1252,6 +1534,14 @@ const ashlingBranch = {
         onSuccess: { next: "ashling_15", text: { en: "Something in your tone reaches it, and it dims a little.", tr: "Ses tonundaki bir şey ona ulaşıyor, biraz sönüyor." } },
         onFail: { next: "ashling_15", effect: () => { damage(1); }, text: { en: "It doesn't understand, or doesn't care, and flares in answer.", tr: "Anlamıyor ya da umursamıyor, cevap olarak parlıyor." } },
       },
+      {
+        label: { en: "Try to smother it bodily, mad as that sounds", tr: "Deli olsa da üstüne kapanıp söndürmeyi dene" },
+        type: "check",
+        stat: "str",
+        dc: 13,
+        onSuccess: { next: "ashling_15", text: { en: "You throw your whole weight against it and, against every instinct telling you this shouldn't work, it does.", tr: "Tüm ağırlığınla üstüne atılıyorsun, bunun işe yaramaması gerektiğini söyleyen her içgüdüne rağmen işe yarıyor." } },
+        onFail: { next: "ashling_15", effect: () => { damage(11); }, text: { en: "It has no interest in being smothered and answers with a wash of heat that leaves you gasping on the floor before you can even think about backing off.", tr: "Söndürülmeye hiç niyeti yok, geri çekilmeyi düşünmene bile fırsat vermeden seni yerde soluk soluğa bırakan bir sıcaklık dalgasıyla karşılık veriyor." } },
+      },
     ],
   },
 
@@ -1271,6 +1561,10 @@ const ashlingBranch = {
         label: { en: "Skirt the edge along the wall", tr: "Duvar boyunca kenardan ilerle" },
         classOnly: "shadow",
         next: "ashling_16c",
+      },
+      { label: { en: "Feel out the stable tiles by sound", tr: "Sağlam fayansları sesten sez" }, type: "check", stat: "wis", dc: 9,
+        onSuccess: { next: "ashling_16", text: { en: "A dull tap tells you which tiles will hold before you even step on them.", tr: "Boğuk bir ses hangi fayansların dayanacağını daha basmadan söylüyor." } },
+        onFail: { next: "ashling_16", effect: () => { damage(1); }, text: { en: "You misjudge the sound and a tile gives out from under you anyway.", tr: "Sesi yanlış yorumluyorsun, yine de altındaki fayans çöküyor." } },
       },
     ],
   },
@@ -1337,6 +1631,18 @@ const ashlingBranch = {
         onSuccess: { next: "ashling_18", text: { en: "You move fast enough that the heat barely registers.", tr: "O kadar hızlı hareket ediyorsun ki sıcaklık neredeyse hissedilmiyor." } },
         onFail: { next: "ashling_18", effect: () => { damage(2); }, text: { en: "The heat catches you halfway and you stumble out singed.", tr: "Yarı yolda sıcaklık seni yakalıyor, kavrulmuş halde çıkıyorsun." } },
       },
+      { label: { en: "Steel your nerve and don't flinch from the flame", tr: "Cesaretini topla, alevden irkilme" }, type: "check", stat: "cha", dc: 10,
+        onSuccess: { next: "ashling_18", text: { en: "You refuse to let the heat rattle your pace, and it never quite catches you.", tr: "Sıcaklığın adımını bozmasına izin vermiyorsun, seni bir türlü yakalayamıyor." } },
+        onFail: { next: "ashling_18", effect: () => { damage(2); }, text: { en: "Your nerve breaks halfway and you flinch right into a lick of flame.", tr: "Cesaretin yarı yolda kırılıyor, tam bir alev diline doğru irkiliyorsun." } },
+      },
+      {
+        label: { en: "Just run it flat out, don't feel the flame", tr: "Alevi hissetme, olduğu gibi koş" },
+        type: "check",
+        stat: "dex",
+        dc: 12,
+        onSuccess: { next: "ashling_18", text: { en: "You're through and past before the flames even have a chance to reach you.", tr: "Alevler sana ulaşmaya fırsat bulamadan geçip gidiyorsun." } },
+        onFail: { next: "ashling_18", effect: () => { damage(9); }, text: { en: "You misjudge a gap at full speed and run straight into a lick of flame that catches your side badly.", tr: "Tam hızdayken bir boşluğu yanlış hesaplıyor, yanını fena şekilde tutuşturan bir aleve doğrudan koşuyorsun." } },
+      },
     ],
   },
 
@@ -1368,6 +1674,20 @@ const ashlingBranch = {
       { label: { en: "Find the cleaner air pocket", tr: "Daha temiz hava cebini bul" }, type: "check", stat: "wis", dc: 9,
         onSuccess: { next: "ashling_19", text: { en: "You spot a thinner patch and follow it through.", tr: "Daha seyrek bir bölge buluyor, onu takip ederek geçiyorsun." } },
         onFail: { next: "ashling_19", effect: () => { damage(1); }, text: { en: "You can't find a clean line and breathe in more than you'd like.", tr: "Temiz bir hat bulamıyor, istediğinden fazlasını soluyorsun." } },
+      },
+      {
+        label: { en: "Speak the old breath-ward", tr: "Eski nefes duasını oku" },
+        classOnly: "rite",
+        next: "ashling_19",
+        text: { en: "The words part the ash around your face like it was never there at all.", tr: "Sözler, yüzünün etrafındaki külü hiç orada değilmiş gibi ikiye ayırıyor." },
+      },
+      {
+        label: { en: "Don't slow down at all, just run flat out", tr: "Hiç yavaşlama, olduğu gibi koş" },
+        type: "check",
+        stat: "con",
+        dc: 12,
+        onSuccess: { next: "ashling_19", text: { en: "Full speed carries you clear before the ash has time to settle in your chest at all.", tr: "Tam hız, kül göğsüne yerleşmeye vakit bulamadan seni karşıya taşıyor." } },
+        onFail: { next: "ashling_19", effect: () => { damage(9); }, text: { en: "You breathe in far more than any careful crossing would have cost you, and it drops you to your knees coughing on the far side.", tr: "Dikkatli bir geçişin maliyetinden çok daha fazlasını soluyorsun, karşı tarafta öksürerek dizlerinin üzerine çöküyorsun." } },
       },
     ],
   },
@@ -1412,6 +1732,14 @@ const ashlingBranch = {
         onSuccess: { next: "ashling_21", text: { en: "You take it one careful step at a time and make it across.", tr: "Adım adım dikkatle ilerliyor, karşıya geçiyorsun." } },
         onFail: { next: "ashling_21", effect: () => { damage(2); }, text: { en: "Your foot skids on the glassy surface and you go down hard.", tr: "Ayağın camsı yüzeyde kayıyor, sert bir şekilde düşüyorsun." } },
       },
+      {
+        label: { en: "Trust the jump, don't test your footing first", tr: "Önce zemini denemeden, atlayışına güven" },
+        type: "check",
+        stat: "str",
+        dc: 13,
+        onSuccess: { next: "ashling_21", text: { en: "You clear the whole ridge in one leap and never have to trust the glassy stone at all.", tr: "Tüm sırtı tek bir sıçrayışla aşıyorsun, camsı taşa hiç güvenmek zorunda kalmıyorsun." } },
+        onFail: { next: "ashling_21", effect: () => { damage(10); }, text: { en: "You come down wrong on the far edge and the glassy stone shatters under the impact, dropping you hard toward the embers before you catch the ledge.", tr: "Karşı kenara yanlış iniyorsun, camsı taş darbenin altında parçalanıyor, çıkıntıya tutunmadan önce korlara doğru sert bir şekilde düşüyorsun." } },
+      },
     ],
   },
 
@@ -1454,6 +1782,14 @@ const ashlingBranch = {
       { label: { en: "Find the calm at its center", tr: "Merkezindeki sakinliği bul" }, type: "check", stat: "wis", dc: 11,
         onSuccess: { next: "ashling_23", text: { en: "You find the still point in it and it settles just enough.", tr: "İçindeki durgun noktayı buluyorsun, yeterince yatışıyor." } },
         onFail: { next: "ashling_23", effect: () => { damage(2); }, text: { en: "You misjudge it and it flares hard before calming.", tr: "Yanlış okuyorsun, yatışmadan önce şiddetle parlıyor." } },
+      },
+      {
+        label: { en: "Push straight into the heart of it, force this to end now", tr: "Doğruca merkezine dal, bunu şimdi bitir" },
+        type: "check",
+        stat: "con",
+        dc: 14,
+        onSuccess: { next: "ashling_23", text: { en: "You walk straight through the worst of it and out the other side, and it has nothing left to answer with.", tr: "En kötüsünün içinden doğrudan geçip karşı tarafa çıkıyorsun, karşılık verecek hali kalmıyor." } },
+        onFail: { next: "ashling_23", effect: () => { damage(12); }, text: { en: "It has everything left to answer with, and it spends all of it on you before you finally stumble clear, blistered and gasping.", tr: "Karşılık verecek her şeyi var ve hepsini üzerinde harcıyor, sen sonunda su toplamış tenle soluk soluğa uzaklaşana kadar." } },
       },
     ],
   },
@@ -1537,6 +1873,10 @@ const boneBranch = {
         onSuccess: { next: "bone_03", text: { en: "You thread through without setting off a single slide.", tr: "Tek bir kayma bile başlatmadan aralarından geçiyorsun." } },
         onFail: { next: "bone_03", effect: () => { damage(2); }, text: { en: "A stack gives way under you and buries your leg to the knee before you dig free.", tr: "Bir yığın altında çöküyor, bacan dizine kadar gömülüyor ama zor bela çıkıyorsun." } },
       },
+      { label: { en: "Push through, steady and unhurried", tr: "Sakin ve aceleci olmadan ilerle" }, type: "check", stat: "con", dc: 9,
+        onSuccess: { next: "bone_03", text: { en: "A few small slides go off around you but none of them find you.", tr: "Etrafında birkaç küçük kayma oluyor ama hiçbiri seni bulmuyor." } },
+        onFail: { next: "bone_03", effect: () => { damage(2); }, text: { en: "A larger slide catches you square and buries you to the waist before you dig free.", tr: "Daha büyük bir kayma tam üstüne geliyor, beline kadar gömülüyorsun ama zor bela çıkıyorsun." } },
+      },
     ],
   },
 
@@ -1592,6 +1932,10 @@ const boneBranch = {
       { label: { en: "Take it without disturbing the rest", tr: "Geri kalanını bozmadan al" }, type: "check", stat: "dex", dc: 8,
         onSuccess: { next: "bone_05", effect: () => { state.relics.push("yellowed grave ring"); }, text: { en: "You slide it free without a sound.", tr: "Hiç ses çıkarmadan çekip alıyorsun." } },
         onFail: { next: "bone_05", effect: () => { damage(1); }, text: { en: "Your hand knocks something loose and a scatter of small bones clatters down around you.", tr: "Elin bir şeyi kaydırıyor, etrafına küçük kemikler dökülüyor." } },
+      },
+      { label: { en: "Sense which piece is safe to move", tr: "Hangi parçanın oynatılmaya güvenli olduğunu sez" }, type: "check", stat: "wis", dc: 9,
+        onSuccess: { next: "bone_05", effect: () => { state.relics.push("yellowed grave ring"); }, text: { en: "You can tell at a glance which bones are load-bearing and which aren't. The ring comes free clean.", tr: "Bir bakışta hangi kemiklerin yük taşıdığını, hangilerinin taşımadığını anlıyorsun. Yüzük temiz bir şekilde çıkıyor." } },
+        onFail: { next: "bone_05", effect: () => { damage(1); }, text: { en: "You guess wrong about the arrangement and the whole pile shifts against your hand.", tr: "Düzeni yanlış tahmin ediyorsun, tüm yığın elinin altında kayıyor." } },
       },
       { label: { en: "Leave it", tr: "Bırak" }, next: "bone_05" },
     ],
@@ -1669,6 +2013,10 @@ const boneBranch = {
         onSuccess: { next: "bone_08", text: { en: "A firm sweep of your arm sends them scattering.", tr: "Kolunu sert bir hareketle sallayınca dağılıyorlar." } },
         onFail: { next: "bone_08", effect: () => { damage(1); }, text: { en: "One clings on and needs to be pried off.", tr: "Biri tutunuyor, çekip çıkarman gerekiyor." } },
       },
+      { label: { en: "Hold their attention with a low, commanding voice", tr: "Alçak ve buyurgan bir sesle dikkatlerini çek" }, type: "check", stat: "cha", dc: 9,
+        onSuccess: { next: "bone_08", text: { en: "Something in the tone makes them freeze in place long enough for you to walk past.", tr: "Sesindeki bir şey, yanından geçmene yetecek kadar onları olduğu yerde dondurur." } },
+        onFail: { next: "bone_08", effect: () => { damage(1); }, text: { en: "They don't care for tone of voice at all, and one gets close enough to nip you.", tr: "Ses tonuna hiç aldırmıyorlar, biri yaklaşıp seni ısırıyor." } },
+      },
     ],
   },
 
@@ -1682,6 +2030,14 @@ const boneBranch = {
     choices: [
       { label: { en: "Take the bone chute", tr: "Kemik oluğuna gir" }, next: "bone_09a" },
       { label: { en: "Take the stair", tr: "Merdiveni kullan" }, next: "bone_09b" },
+      {
+        label: { en: "Dive down the chute head-first, no control at all", tr: "Kontrol etmeye kalkmadan oluğa baş üstü dal" },
+        type: "check",
+        stat: "dex",
+        dc: 13,
+        onSuccess: { next: "bone_10", text: { en: "You twist in the fall by pure instinct and land already moving, well past where the careful route would've left you.", tr: "Düşüş sırasında salt içgüdüyle dönüyor, hâlâ hareket halinde iniyorsun, dikkatli yolun seni bırakacağı yerin çok ötesinde." } },
+        onFail: { next: "bone_10", effect: () => { damage(9); }, text: { en: "You hit the bottom wrong, at speed, with nothing to break the fall but old bone that shatters under you on impact.", tr: "Hızla, düşüşü yumuşatacak hiçbir şey olmadan dibe yanlış çarpıyorsun, altındaki eski kemikler darbeyle parçalanıyor." } },
+      },
     ],
   },
 
@@ -1703,6 +2059,20 @@ const boneBranch = {
         onSuccess: { next: "bone_10", text: { en: "You manage to slow yourself enough to land clean.", tr: "Kendini yeterince yavaşlatıp temiz iniyorsun." } },
         onFail: { next: "bone_10", effect: () => { damage(2); }, text: { en: "You hit the bottom hard and lie still for a second before getting up.", tr: "Dibe sert bir şekilde çarpıyor, ayağa kalkmadan önce bir saniye öylece kalıyorsun." } },
       },
+      {
+        label: { en: "Shoulder through the sides like a battering ram", tr: "Kenarların içinden koç başı gibi geç" },
+        classOnly: "blade",
+        next: "bone_10",
+        text: { en: "Your bulk and your armor make the fall barely worth noticing. You come out the other end still on your feet.", tr: "İriliğin ve zırhın düşüşü fark edilir bile olmaktan çıkarıyor. Diğer uçtan hâlâ ayaktayken çıkıyorsun." },
+      },
+      {
+        label: { en: "Slam yourself to a stop the hard way, no finesse", tr: "İnceliğe aldırmadan kendini sert bir şekilde durdur" },
+        type: "check",
+        stat: "str",
+        dc: 12,
+        onSuccess: { next: "bone_10", text: { en: "You brace hard against the sides and grind yourself to a stop before the bottom.", tr: "Kenarlara sertçe dayanıyor, dibe varmadan kendini durduruyorsun." } },
+        onFail: { next: "bone_10", effect: () => { damage(9); }, text: { en: "You slam into the bottom at full speed, old bone splintering under the impact and driving a piece deep enough to matter.", tr: "Tam hızda dibe çarpıyorsun, eski kemikler darbeyle kırılıyor, bir parçası önemli olacak kadar derine saplanıyor." } },
+      },
     ],
   },
 
@@ -1717,6 +2087,10 @@ const boneBranch = {
       { label: { en: "Reach in for it", tr: "Elini uzatıp al" }, type: "check", stat: "dex", dc: 8,
         onSuccess: { next: "bone_10", effect: () => { state.relics.push("marrow charm"); }, text: { en: "You work it free, a small charm strung on old cord.", tr: "Yerinden söküyorsun, eski bir iple bağlanmış küçük bir tılsım." } },
         onFail: { next: "bone_10", text: { en: "It's wedged too deep to reach without more time.", tr: "Daha fazla vakit gerektirecek kadar derin sıkışmış, ulaşamıyorsun." } },
+      },
+      { label: { en: "Work out the safest angle first", tr: "Önce en güvenli açıyı hesapla" }, type: "check", stat: "int", dc: 8,
+        onSuccess: { next: "bone_10", effect: () => { state.relics.push("marrow charm"); }, text: { en: "You picture the gap's shape before reaching in, and your hand finds it on the first try.", tr: "Elini uzatmadan önce aralığın şeklini zihninde canlandırıyorsun, elin ilk denemede buluyor." } },
+        onFail: { next: "bone_10", text: { en: "You can't work out the angle in time and give up before wasting more of it.", tr: "Zamanında açıyı çözemiyor, daha fazla vakit kaybetmeden vazgeçiyorsun." } },
       },
       { label: { en: "Leave it", tr: "Bırak" }, next: "bone_10" },
     ],
@@ -1787,6 +2161,18 @@ const boneBranch = {
         onSuccess: { next: "bone_12", effect: () => { state.relics.push("a carved bone comb"); }, text: { en: "You manage to shift it enough to reach inside.", tr: "İçeri ulaşacak kadar kaydırmayı başarıyorsun." } },
         onFail: { next: "bone_12", text: { en: "It won't budge, and you're not going to waste more time on it.", tr: "Hiç kımıldamıyor, daha fazla vakit harcamayacaksın." } },
       },
+      { label: { en: "Work the lid loose by finesse, not force", tr: "Kapağı zorla değil, incelikle gevşet" }, type: "check", stat: "dex", dc: 10,
+        onSuccess: { next: "bone_12", effect: () => { state.relics.push("a carved bone comb"); }, text: { en: "You find the seam and work it patiently until the lid slides free.", tr: "Kaynak yerini buluyor, sabırla çalışarak kapağın kaymasını sağlıyorsun." } },
+        onFail: { next: "bone_12", text: { en: "The seam won't give without more force than you're willing to risk on it.", tr: "Kaynak, riske atmaya niyetli olduğundan daha fazla güç istiyor, vazgeçiyorsun." } },
+      },
+      {
+        label: { en: "Put your whole weight into one violent heave", tr: "Tüm ağırlığını tek bir şiddetli hamlede kullan" },
+        type: "check",
+        stat: "str",
+        dc: 13,
+        onSuccess: { next: "bone_12", effect: () => { state.relics.push("a carved bone comb"); }, text: { en: "The stone lid grinds free all at once under the force.", tr: "Taş kapak bu güç altında birden gıcırdayarak açılıyor." } },
+        onFail: { next: "bone_12", effect: () => { damage(9); }, text: { en: "The lid doesn't move, but your grip does, the stone edge tearing across your hand as it slips.", tr: "Kapak kımıldamıyor ama tutuşun kayıyor, taş kenar kayarken elinin üzerinden yırtarcasına geçiyor." } },
+      },
       { label: { en: "Leave it", tr: "Bırak" }, next: "bone_12" },
     ],
   },
@@ -1807,6 +2193,20 @@ const boneBranch = {
         text: { en: "Your strength alone is enough, no need to work out the niches at all.", tr: "Sadece gücün yetiyor, oyukları çözmeye bile gerek kalmıyor." },
       },
       { label: { en: "Work out the burial order", tr: "Gömü sırasını çöz" }, next: "bone_13" },
+      {
+        label: { en: "Find the crawlspace a thief would have used", tr: "Bir hırsızın kullanacağı sürünme aralığını bul" },
+        classOnly: "shadow",
+        next: "bone_14",
+        text: { en: "Vaults like this always have one, a gap left for whoever sealed it last to get back out. You find it fast.", tr: "Bu tür mahzenlerin her zaman biri vardır, son mühürleyenin çıkması için bırakılan bir aralık. Onu hızla buluyorsun." },
+      },
+      {
+        label: { en: "Squeeze through a gap before the collapse settles more", tr: "Çöküntü daha fazla oturmadan bir aralıktan sıkış" },
+        type: "check",
+        stat: "dex",
+        dc: 12,
+        onSuccess: { next: "bone_14", text: { en: "You find a narrow gap and slip through before the weight above can shift again.", tr: "Dar bir aralık buluyor, üstündeki ağırlık yeniden kaymadan sıyrılıyorsun." } },
+        onFail: { next: "bone_14", effect: () => { damage(10); }, text: { en: "The gap shifts while you're still inside it, bone and stone grinding down on you before you wrench yourself the rest of the way through.", tr: "Sen hâlâ içindeyken aralık kayıyor, kemik ve taş üstüne çökmeye başlıyor, kendini zorlukla geri kalan yoldan çekip çıkarıyorsun." } },
+      },
     ],
   },
 
@@ -1861,6 +2261,14 @@ const boneBranch = {
         onSuccess: { next: "bone_15", effect: () => { state.flags.add("bone_outpaced"); }, text: { en: "You easily leave it behind, its pace no match for yours.", tr: "Kolayca geride bırakıyorsun, hızına yetişemiyor." } },
         onFail: { next: "bone_15", effect: () => { damage(1); }, text: { en: "It's slower than you but reaches you once before you clear the room.", tr: "Senden yavaş ama odayı geçmeden önce bir kez sana ulaşıyor." } },
       },
+      {
+        label: { en: "Go for it while it's still rising, before it's fully up", tr: "Tam kalkmadan, hâlâ ayağa kalkarken üstüne git" },
+        type: "check",
+        stat: "str",
+        dc: 13,
+        onSuccess: { next: "bone_15", text: { en: "You catch it half-formed and unbalanced, and it comes apart before it ever fully stands.", tr: "Onu yarı şekillenmiş ve dengesiz halde yakalıyorsun, tam ayağa kalkmadan dağılıyor." } },
+        onFail: { next: "bone_15", effect: () => { damage(10); }, text: { en: "It finishes rising faster than you expected and meets your attack with a backhand of old bone that puts you flat on the ground.", tr: "Beklediğinden hızlı ayağa kalkıyor, saldırını eski kemikten bir tokatla karşılıyor, seni yere seriyor." } },
+      },
     ],
   },
 
@@ -1880,6 +2288,10 @@ const boneBranch = {
         label: { en: "Find the one stable line through", tr: "Sağlam tek hattı bul" },
         classOnly: "shadow",
         next: "bone_16c",
+      },
+      { label: { en: "Walk it heavy and steady, let it shift", tr: "Ağır ve sabit adımlarla yürü, kaysın kayabildiği kadar" }, type: "check", stat: "con", dc: 9,
+        onSuccess: { next: "bone_16", text: { en: "You let the bone shift under you without ever losing your footing.", tr: "Kemiklerin altında kaymasına izin veriyorsun, ama hiç dengeni kaybetmiyorsun." } },
+        onFail: { next: "bone_16", effect: () => { damage(1); }, text: { en: "A worse slide than expected nearly takes your legs out, but you stay upright.", tr: "Beklenenden kötü bir kayma neredeyse bacaklarını götürüyor ama ayakta kalıyorsun." } },
       },
     ],
   },
@@ -1946,6 +2358,18 @@ const boneBranch = {
         onSuccess: { next: "bone_18", text: { en: "You keep your nerve and push clear of them.", tr: "Soğukkanlılığını koruyup aralarından sıyrılıyorsun." } },
         onFail: { next: "bone_18", effect: () => { damage(2); }, text: { en: "Several get a scratch in before you clear the gallery.", tr: "Galeriyi geçmeden önce birkaçı seni çiziyor." } },
       },
+      { label: { en: "Weave through them at speed", tr: "Hızla aralarında dolan" }, type: "check", stat: "dex", dc: 10,
+        onSuccess: { next: "bone_18", text: { en: "You pick a path through the scrabbling mass without ever slowing down.", tr: "Kaynaşan kalabalığın arasından hiç yavaşlamadan bir yol buluyorsun." } },
+        onFail: { next: "bone_18", effect: () => { damage(2); }, text: { en: "You misjudge a gap and end up trampling straight into the middle of them.", tr: "Bir boşluğu yanlış hesaplıyor, tam ortalarına düşüyorsun." } },
+      },
+      {
+        label: { en: "Cut straight through the swarm at a dead run", tr: "Sürüyü tam hızda yararak geç" },
+        type: "check",
+        stat: "dex",
+        dc: 12,
+        onSuccess: { next: "bone_18", text: { en: "You're through and clear before most of them even register you.", tr: "Çoğu seni fark etmeden geçip gidiyorsun." } },
+        onFail: { next: "bone_18", effect: () => { damage(9); }, text: { en: "You go down mid-stride and they swarm the opening before you can scramble back up, leaving deep scratches everywhere they reach.", tr: "Tam koşarken düşüyorsun, sen kalkmadan önce üzerine üşüşüyorlar, ulaştıkları her yerde derin çizikler bırakıyorlar." } },
+      },
     ],
   },
 
@@ -1977,6 +2401,20 @@ const boneBranch = {
       { label: { en: "Find the clearer air along the ceiling", tr: "Tavan boyunca daha temiz havayı bul" }, type: "check", stat: "wis", dc: 9,
         onSuccess: { next: "bone_19", text: { en: "You keep low to a thinner layer and pass through mostly clean.", tr: "Daha seyrek bir tabakaya alçalıp neredeyse temiz geçiyorsun." } },
         onFail: { next: "bone_19", effect: () => { damage(1); }, text: { en: "You can't find a clean line in time and breathe in more than you'd like.", tr: "Zamanında temiz bir hat bulamıyor, istediğinden fazlasını soluyorsun." } },
+      },
+      {
+        label: { en: "Speak the old ward against the dust", tr: "Toza karşı eski duayı oku" },
+        classOnly: "rite",
+        next: "bone_19",
+        text: { en: "The words settle the dust around you before it ever reaches your throat.", tr: "Sözler, boğazına ulaşmadan önce etrafındaki tozu yatıştırıyor." },
+      },
+      {
+        label: { en: "Don't bother finding clean air, just run", tr: "Temiz hava aramaya kalkma, sadece koş" },
+        type: "check",
+        stat: "con",
+        dc: 12,
+        onSuccess: { next: "bone_19", text: { en: "Speed gets you through before the dust has any real chance to settle in.", tr: "Hız, toz gerçekten yerleşmeye fırsat bulamadan seni karşıya taşıyor." } },
+        onFail: { next: "bone_19", effect: () => { damage(9); }, text: { en: "You breathe in far more of it than any careful crossing would have cost, and it takes long, ugly minutes to stop coughing enough to move on.", tr: "Dikkatli bir geçişin maliyetinden çok fazlasını soluyorsun, öksürmeyi kesip devam edebilmen uzun, çirkin dakikalar alıyor." } },
       },
     ],
   },
@@ -2021,6 +2459,14 @@ const boneBranch = {
         onSuccess: { next: "bone_21", text: { en: "You take it one careful step at a time.", tr: "Adım adım dikkatle ilerliyorsun." } },
         onFail: { next: "bone_21", effect: () => { damage(2); }, text: { en: "The ridge shifts under you and you scramble the rest of the way across.", tr: "Sırt altında kayıyor, geri kalanını zor bela geçiyorsun." } },
       },
+      {
+        label: { en: "Leap the whole gap rather than creep across", tr: "Sürünmek yerine tüm boşluğu atla" },
+        type: "check",
+        stat: "str",
+        dc: 13,
+        onSuccess: { next: "bone_21", text: { en: "You clear it in one bound and never have to trust the packed bone at all.", tr: "Tek bir sıçrayışta aşıyorsun, sıkışmış kemiğe hiç güvenmek zorunda kalmıyorsun." } },
+        onFail: { next: "bone_21", effect: () => { damage(10); }, text: { en: "You come down short on the far side and the ridge shatters under the impact, dropping you hard into the darker vault below before you catch a handhold.", tr: "Karşı tarafa kısa düşüyorsun, sırt darbenin altında parçalanıyor, bir tutamak bulmadan önce aşağıdaki karanlık mahzene sert bir şekilde düşüyorsun." } },
+      },
     ],
   },
 
@@ -2063,6 +2509,14 @@ const boneBranch = {
       { label: { en: "Wear it down and slip past", tr: "Yorup yanından sıyrıl" }, type: "check", stat: "dex", dc: 11,
         onSuccess: { next: "bone_23", text: { en: "You keep moving until it simply can't keep up.", tr: "Yetişemez hale gelene kadar hareket etmeye devam ediyorsun." } },
         onFail: { next: "bone_23", effect: () => { damage(2); }, text: { en: "It manages one solid grab before you finally break free.", tr: "Kurtulmadan önce sağlam bir kez seni yakalıyor." } },
+      },
+      {
+        label: { en: "Go for broke, put everything into ending this now", tr: "Her şeyini ortaya koy, bunu şimdi bitir" },
+        type: "check",
+        stat: "str",
+        dc: 14,
+        onSuccess: { next: "bone_23", text: { en: "You put every last bit of strength into one finishing blow, and old bone finally stays down for good.", tr: "Son gücünü bitirici bir darbeye veriyorsun, eski kemikler sonunda bir daha kalkmamak üzere düşüyor." } },
+        onFail: { next: "bone_23", effect: () => { damage(12); }, text: { en: "You commit everything to ending it fast and it makes you pay for every ounce of that recklessness before it finally, slowly, comes apart.", tr: "Her şeyini bunu hızlıca bitirmeye adıyorsun, o da sonunda yavaşça dağılmadan önce bu pervasızlığın her gramının bedelini fazlasıyla ödetiyor." } },
       },
     ],
   },
@@ -2592,6 +3046,32 @@ function renderCreation() {
   diffSection.appendChild(diffRow);
   root.appendChild(diffSection);
 
+  const raceSection = document.createElement("div");
+  raceSection.className = "create-section";
+  raceSection.innerHTML = `<h3>${state.lang === "tr" ? "Irk seç" : "Choose your race"}</h3>`;
+  const raceRow = document.createElement("div");
+  raceRow.className = "card-row";
+  Object.values(RACES).forEach((r) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "pick-card" + (state.raceId === r.id ? " picked" : "");
+    card.innerHTML = `
+      <strong>${t(r.name)}</strong>
+      <span>${t(r.desc)}</span>
+      <span class="stat-alloc-label">${t(r.trait)}</span>
+    `;
+    card.addEventListener("click", () => {
+      state.raceId = r.id;
+      state.baseStats = { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 };
+      state.pointBuyLeft = POINT_BUY_BUDGET + (r.id === "human" ? 1 : 0);
+      recomputeStats();
+      renderCreation();
+    });
+    raceRow.appendChild(card);
+  });
+  raceSection.appendChild(raceRow);
+  root.appendChild(raceSection);
+
   const classSection = document.createElement("div");
   classSection.className = "create-section";
   classSection.innerHTML = `<h3>${state.lang === "tr" ? "Sınıf seç" : "Choose your class"}</h3>`;
@@ -2608,10 +3088,8 @@ function renderCreation() {
     `;
     card.addEventListener("click", () => {
       state.classId = c.id;
-      state.stats = { ...c.stats };
       state.maxHp = c.hp;
       state.hp = c.hp;
-      state.pointsLeft = 6;
       renderCreation();
     });
     classRow.appendChild(card);
@@ -2619,37 +3097,43 @@ function renderCreation() {
   classSection.appendChild(classRow);
   root.appendChild(classSection);
 
-  if (state.classId) {
+  if (state.raceId && state.classId) {
     const statSection = document.createElement("div");
     statSection.className = "create-section";
-    statSection.innerHTML = `<h3>${state.lang === "tr" ? "Statları dağıt" : "Allocate stats"} (${state.pointsLeft} ${state.lang === "tr" ? "puan kaldı" : "points left"})</h3>`;
+    statSection.innerHTML = `<h3>${state.lang === "tr" ? "Puan dağıt (point buy)" : "Allocate stats (point buy)"} (${state.pointBuyLeft} ${state.lang === "tr" ? "puan kaldı" : "points left"})</h3>`;
     const statRow = document.createElement("div");
     statRow.className = "stat-alloc-row";
     ["str", "dex", "con", "int", "wis", "cha"].forEach((key) => {
-      const base = CLASSES[state.classId].stats[key];
+      const base = state.baseStats[key];
+      const final = state.stats[key];
+      const nextCost = base < 15 ? POINT_BUY_COSTS[base + 1 - 8] - POINT_BUY_COSTS[base - 8] : Infinity;
       const row = document.createElement("div");
       row.className = "stat-alloc";
       row.innerHTML = `
         <span class="stat-alloc-label">${t(STAT_LABEL[key])}</span>
         <button type="button" class="stat-btn" data-act="minus" data-key="${key}">-</button>
-        <span class="stat-alloc-value">${state.stats[key]}</span>
+        <span class="stat-alloc-value">${base}</span>
         <button type="button" class="stat-btn" data-act="plus" data-key="${key}">+</button>
+        <span class="stat-alloc-label">${state.lang === "tr" ? "toplam" : "total"} ${final}</span>
       `;
       const minusBtn = row.querySelector('[data-act="minus"]');
       const plusBtn = row.querySelector('[data-act="plus"]');
-      minusBtn.disabled = state.stats[key] <= base;
-      plusBtn.disabled = state.pointsLeft <= 0 || state.stats[key] >= base + 3;
+      minusBtn.disabled = base <= 8;
+      plusBtn.disabled = base >= 15 || state.pointBuyLeft < nextCost;
       minusBtn.addEventListener("click", () => {
-        if (state.stats[key] > base) {
-          state.stats[key]--;
-          state.pointsLeft++;
+        if (base > 8) {
+          const refund = POINT_BUY_COSTS[base - 8] - POINT_BUY_COSTS[base - 1 - 8];
+          state.baseStats[key]--;
+          state.pointBuyLeft += refund;
+          recomputeStats();
           renderCreation();
         }
       });
       plusBtn.addEventListener("click", () => {
-        if (state.pointsLeft > 0 && state.stats[key] < base + 3) {
-          state.stats[key]++;
-          state.pointsLeft--;
+        if (base < 15 && state.pointBuyLeft >= nextCost) {
+          state.baseStats[key]++;
+          state.pointBuyLeft -= nextCost;
+          recomputeStats();
           renderCreation();
         }
       });
@@ -2676,7 +3160,7 @@ function renderCreation() {
   }
 
   const beginBtn = document.getElementById("begin-button");
-  beginBtn.disabled = !(state.difficultyId && state.classId && state.name.trim());
+  beginBtn.disabled = !(state.difficultyId && state.raceId && state.classId && state.name.trim());
 }
 
 function beginStory() {
@@ -2980,6 +3464,7 @@ function saveGame() {
       JSON.stringify({
         name: state.name,
         classId: state.classId,
+        raceId: state.raceId,
         difficultyId: state.difficultyId,
         stats: state.stats,
         hp: state.hp,
@@ -3018,6 +3503,7 @@ function hasSave() {
 function applySavedState(saved) {
   state.name = saved.name;
   state.classId = saved.classId;
+  state.raceId = saved.raceId || null;
   state.difficultyId = saved.difficultyId;
   state.stats = saved.stats;
   state.hp = saved.hp;
@@ -3058,9 +3544,11 @@ document.getElementById("begin-button").addEventListener("click", beginStory);
 function resetToFreshCharacter() {
   state.name = "";
   state.classId = null;
+  state.raceId = null;
   state.difficultyId = null;
-  state.stats = { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 };
-  state.pointsLeft = 6;
+  state.baseStats = { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 };
+  state.stats = { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 };
+  state.pointBuyLeft = POINT_BUY_BUDGET;
   state.hp = 10;
   state.maxHp = 10;
   state.relics = [];
