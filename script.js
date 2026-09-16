@@ -3022,6 +3022,8 @@ function endRun(endingId) {
 
 function renderCreation() {
   const root = document.getElementById("creation-root");
+  const scrollHost = document.querySelector(".overlay-card--intro");
+  const savedScroll = scrollHost ? scrollHost.scrollTop : 0;
   root.innerHTML = "";
 
   const diffSection = document.createElement("div");
@@ -3161,6 +3163,8 @@ function renderCreation() {
 
   const beginBtn = document.getElementById("begin-button");
   beginBtn.disabled = !(state.difficultyId && state.raceId && state.classId && state.name.trim());
+
+  if (scrollHost) scrollHost.scrollTop = savedScroll;
 }
 
 function beginStory() {
