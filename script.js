@@ -3110,7 +3110,11 @@ function renderCreation() {
   if (state.raceId && state.classId) {
     const statSection = document.createElement("div");
     statSection.className = "create-section";
-    statSection.innerHTML = `<h3>${state.lang === "tr" ? "Puan dağıt (point buy)" : "Allocate stats (point buy)"} (${state.pointBuyLeft} ${state.lang === "tr" ? "puan kaldı" : "points left"})</h3>`;
+    statSection.innerHTML = `<h3>${state.lang === "tr" ? "Puan dağıt (point buy)" : "Allocate stats (point buy)"} (${state.pointBuyLeft} ${state.lang === "tr" ? "puan kaldı" : "points left"})</h3>${
+      state.pointBuyLeft > 0
+        ? `<p class="stat-alloc-label">${state.lang === "tr" ? "Devam etmeden önce tüm puanları dağıt." : "Spend all your points before continuing."}</p>`
+        : ""
+    }`;
     const statRow = document.createElement("div");
     statRow.className = "stat-alloc-row";
     ["str", "dex", "con", "int", "wis", "cha"].forEach((key) => {
@@ -3170,7 +3174,7 @@ function renderCreation() {
   }
 
   const beginBtn = document.getElementById("begin-button");
-  beginBtn.disabled = !(state.difficultyId && state.raceId && state.classId && state.name.trim());
+  beginBtn.disabled = !(state.difficultyId && state.raceId && state.classId && state.name.trim() && state.pointBuyLeft === 0);
 
   if (scrollHost) scrollHost.scrollTop = savedScroll;
 }
