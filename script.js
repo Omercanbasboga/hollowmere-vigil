@@ -216,10 +216,14 @@ function difficultyMod() {
   return DIFFICULTIES[state.difficultyId].mod;
 }
 
+function abilityMod(score) {
+  return Math.floor((score - 10) / 2);
+}
+
 function rollCheck(statKey, dc) {
   const roll = 1 + Math.floor(Math.random() * 20);
   const statValue = state.stats[statKey];
-  const total = roll + statValue;
+  const total = roll + abilityMod(statValue);
   const target = dc + difficultyMod();
   let success = total >= target;
   if (statKey === "wis" && state.raceId === "elf" && !state.flags.has("elf_trait_used")) {
@@ -3057,9 +3061,13 @@ function renderCreation() {
     const card = document.createElement("button");
     card.type = "button";
     card.className = "pick-card" + (state.raceId === r.id ? " picked" : "");
+    const bonusText = Object.entries(r.bonus)
+      .map(([key, val]) => `+${val} ${t(STAT_LABEL[key])}`)
+      .join(", ");
     card.innerHTML = `
       <strong>${t(r.name)}</strong>
       <span>${t(r.desc)}</span>
+      <span class="sheet-tag">${bonusText}</span>
       <span class="stat-alloc-label">${t(r.trait)}</span>
     `;
     card.addEventListener("click", () => {
@@ -3293,7 +3301,7 @@ function renderRollResult(choicesEl) {
   box.innerHTML = `
     <svg class="roll-die ${result.success ? "roll-die--win" : "roll-die--lose"}"><use href="#icon-d20"></use></svg>
     <div class="roll-text">
-      <div class="roll-formula">${label}: ${result.roll} + ${statLabel} ${result.statValue} = ${result.total} / ${result.target}</div>
+      <div class="roll-formula">${label}: ${result.roll} ${abilityMod(result.statValue) >= 0 ? "+" : "-"} ${statLabel} ${Math.abs(abilityMod(result.statValue))} = ${result.total} / ${result.target}</div>
       <div class="roll-outcome roll-outcome--${result.success ? "win" : "lose"}">${outcomeLabel}</div>
     </div>
   `;
